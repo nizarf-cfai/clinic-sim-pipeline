@@ -1,0 +1,64 @@
+{
+  "type": "OBJECT",
+  "properties": {
+    "message": {
+      "type": "STRING",
+      "description": "The text response from the admin."
+    },
+    "action_type": {
+      "type": "STRING",
+      "enum": ["TEXT_ONLY", "SEND_FORM", "OFFER_SLOTS", "CONFIRM_APPOINTMENT"],
+      "description": "Internal flag to help frontend render the correct UI."
+    },
+    "form_request": {
+      "type": "OBJECT",
+      "description": "Only present if action_type is SEND_FORM. Represents the blank intake form.",
+      "properties": {
+        "form_id": {"type": "STRING"},
+        "fields": {
+          "type": "OBJECT",
+          "description": "Key-value pairs of empty fields to be filled"
+        }
+      }
+    },
+    "available_slots": {
+      "type": "OBJECT",
+      "description": "Only present if action_type is OFFER_SLOTS.",
+      "properties": {
+        "doctorName": {"type": "STRING"},
+        "specialty": {"type": "STRING"},
+        "slots": {
+          "type": "ARRAY",
+          "items": {
+            "type": "OBJECT",
+            "properties": {
+              "slotId": {"type": "STRING"},
+              "date": {"type": "STRING"},
+              "time": {"type": "STRING"},
+              "type": {"type": "STRING"}
+            }
+          }
+        }
+      }
+    },
+    "confirmed_appointment": {
+      "type": "OBJECT",
+      "description": "Only present if action_type is CONFIRM_APPOINTMENT.",
+      "properties": {
+        "appointmentId": {"type": "STRING"},
+        "status": {"type": "STRING"},
+        "schedule": {
+            "type": "OBJECT",
+            "properties": {
+                "date": {"type": "STRING"},
+                "time": {"type": "STRING"},
+                "provider": {"type": "STRING"},
+                "location": {"type": "STRING"},
+                "instructions": {"type": "STRING"}
+            }
+        }
+      }
+    }
+  },
+  "required": ["message", "action_type"]
+}

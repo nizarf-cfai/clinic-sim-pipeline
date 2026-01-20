@@ -740,61 +740,133 @@ class PatientManager(BaseLogicAgent):
                         content_type="image/png"
                     )
 
+        print()
+        res = {
+            "conversation" : [
+                    {
+                    'sender': 'admin',
+                    'message': 'Hello, this is Linda the Hepatology Clinic admin desk. How can I help you today?'
+                    }
+            ]
+        }
+        self.gcs.create_file_from_string(json.dumps(res, indent=4), f"patient_data/{self.args.get('patient_id')}/pre_consultation_chat.json", content_type="application/json")
+
 
 class PreConsulteAgent(BaseLogicAgent):
     def __init__(self):
         super().__init__()  
         self.gcs = bucket_ops.GCSBucketManager(bucket_name="clinic_sim")
 
-    async def pre_consulte_agent(self,current_user_message, patient_id:str):
+    def _get_available_slots(self):
+        """
+        Mock API call to get real-time availability.
+        In a real app, this would query your calendar DB.
+        """
+        return {
+            "doctorName": "Dr. A. Gupta",
+            "specialty": "Hepatology",
+            "slots": [
+                {"slotId": "SLOT_10_AM", "date": "2025-12-10", "time": "09:30 AM", "type": "In-Person"},
+                {"slotId": "SLOT_11_PM", "date": "2025-12-11", "time": "02:00 PM", "type": "In-Person"},
+                {"slotId": "SLOT_12_AM", "date": "2025-12-12", "time": "10:00 AM", "type": "In-Person"}
+            ]
+        }
+
+    async def pre_consulte_agent(self, user_request:dict, patient_id: str):
+        # 1. Load Resources
+        current_user_message = user_request.get("patient_message", "")
+        user_attachments = user_request.get("patient_attachment", [])
+        user_form_data = user_request.get("patient_form", {})
 
         with open("system_prompts/live_admin_agent.md", "r", encoding="utf-8") as f: 
-                system_instruction = f.read()
+            system_instruction = f.read()
+        
+        # Load the Strict JSON Schema
+        with open("response_schema/pre_consult_admin.json", "r", encoding="utf-8") as f:
+            response_schema = json.load(f)
 
-        # 1. Format the current input to append to history for context
-        # If the user sent an attachment, we explicitly describe it in the prompt
-        pre_consultation_chat = json.loads(self.gcs.read_file_as_string(f"patient_data/{patient_id}/pre_consultation_chat.json"))
+        # Blank form template for SEND_FORM action
+        with open("utils/blank_pre_consult_form.json", "r", encoding="utf-8") as f:
+            blank_form = json.load(f)
 
+        # 2. Load History
+        history_path = f"patient_data/{patient_id}/pre_consultation_chat.json"
+        
+        # Handle case where file doesn't exist (First run)
+        try:
+            chat_data = json.loads(self.gcs.read_file_as_string(history_path))
+        except:
+            # Initialize if missing
+            chat_data = {"conversation": []}
+            
+        history = chat_data.get("conversation", [])
+
+        # 3. Get External Data (Slots) to inject into context
+        available_slots = self._get_available_slots()
+
+        # 4. Construct Prompt Context
+        # We inject the slots into the prompt so the LLM knows what to offer when the time comes
+        prompt_content = (
+            f"### CONVERSATION HISTORY (JSON) ###\n"
+            f"{json.dumps(history, indent=2)}\n\n"
+            f"### LATEST USER INPUT ###\n"
+            f"{current_user_message}\n\n"
+            f"### AVAILABLE SLOTS (Use this data if Action is OFFER_SLOTS) ###\n"
+            f"{json.dumps(available_slots, indent=2)}\n\n"
+            f"### TASK ###\n"
+            f"Determine the next state based on the history. Return the JSON response."
+        )
 
         try:
-            # 2. Construct the Context
-            # We serialize the history so the LLM knows what has already been asked/answered.
-            prompt_content = (
-                f"### CONVERSATION HISTORY (JSON) ###\n"
-                f"{json.dumps(pre_consultation_chat, indent=2)}\n\n"
-                f"### LATEST USER TEXT ###\n"
-                f"{current_user_message}\n\n"
-                f"### TASK ###\n"
-                f"Analyze the history. Check the last message for 'attachment' keys. "
-                f"Determine the next step in the Protocol Checklist. "
-                f"Generate the response."
-            )
-
+            # 5. Call LLM with JSON Schema
             response = await self.client.aio.models.generate_content(
                 model=MODEL, 
                 contents=prompt_content,
                 config=types.GenerateContentConfig(
-                    response_mime_type="text/plain", 
+                    response_mime_type="application/json", 
+                    response_schema=response_schema,
                     system_instruction=system_instruction, 
-                    temperature=0.3 # Low temp to stick strictly to the protocol
+                    temperature=0.3
                 )
             )
             
-            pre_consultation_chat['conversation'].append({
+            # 6. Parse the LLM Response
+            agent_response_obj = json.loads(response.text)
+
+            # 7. Update History
+            # Append User Message
+            history.append({
                 'sender': 'patient',
-                'message': current_user_message
+                'message': current_user_message,
+                "attachments": user_attachments,
+                "form_data": user_form_data
             })
 
-            pre_consultation_chat['conversation'].append({
-                'sender': 'admin',
-                'message': response.text.strip()
-            })
+            # Append Admin Response (The Full Object)
+            # We strip null fields to keep the JSON clean
+            if agent_response_obj.get("action_type") == "SEND_FORM":
+                agent_response_obj['form_request'] = blank_form
+                
+            clean_response = {k: v for k, v in agent_response_obj.items() if v is not None}
+            clean_response['sender'] = 'admin'
+            
+            history.append(clean_response)
 
-            self.gcs.create_file_from_string(json.dumps(pre_consultation_chat, indent=4), f"patient_data/{patient_id}/pre_consultation_chat.json", content_type="application/json")
+            # 8. Save back to GCS
+            chat_data["conversation"] = history
+            self.gcs.create_file_from_string(
+                json.dumps(chat_data, indent=4), 
+                history_path, 
+                content_type="application/json"
+            )
 
-
-            return response.text.strip()
+            # Return the full object so the server/frontend can render forms/slots
+            return agent_response_obj
             
         except Exception as e:
-            print(f"Error in generate_reply: {e}") 
-            return "I apologize, I'm having trouble connecting to the system. Could you please repeat that?"
+            print(f"Error in pre_consulte_agent: {e}") 
+            # Fallback text error
+            return {
+                "message": "I apologize, the system is currently syncing. Please try again.",
+                "action_type": "TEXT_ONLY"
+            }

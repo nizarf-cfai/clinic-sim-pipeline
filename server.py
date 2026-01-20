@@ -35,10 +35,12 @@ chat_agent = PreConsulteAgent()
 class ChatRequest(BaseModel):
     patient_id: str
     patient_message: str
+    patient_attachment: Optional[list] = None  # For future use, e.g., uploading files
+    patient_form: Optional[dict] = None  # For future use, e.g., uploading files
 
 class ChatResponse(BaseModel):
     patient_id: str
-    nurse_response: str
+    nurse_response: dict # Changed from str to dict to handle the rich JSON
     status: str
 
 # --- Endpoints ---
@@ -54,18 +56,18 @@ async def handle_chat(payload: ChatRequest):
     updates GCS history, and returns the Nurse/Admin response.
     """
     logger.info(f"Received message from patient: {payload.patient_id}")
-
+    request_dict = payload.model_dump() 
     try:
         # Call the logic defined in my_agents.py
         # This function handles reading history, calling Gemini, and saving history
-        response_text = await chat_agent.pre_consulte_agent(
-            current_user_message=payload.patient_message,
+        response_data = await chat_agent.pre_consulte_agent(
+            user_request=request_dict,
             patient_id=payload.patient_id
         )
 
         return ChatResponse(
             patient_id=payload.patient_id,
-            nurse_response=response_text,
+            nurse_response=response_data, # This now contains message, action_type, form_request, etc.
             status="success"
         )
 
@@ -105,6 +107,47 @@ async def get_chat_history(patient_id: str):
         logger.error(f"Error fetching chat history for {patient_id}: {str(e)}")
         # Check if it's a specific GCS 'Not Found' error if possible, otherwise generic 404
         raise HTTPException(status_code=404, detail=f"Chat history not found for patient {patient_id}")
+
+@app.post("/chat/{patient_id}/reset")
+async def reset_chat_history(patient_id: str):
+    """
+    Resets the chat history for a specific patient to the default initial greeting.
+    """
+    try:
+        # Define the default starting state
+        default_chat_state = {
+            "conversation": [
+                {
+                    'sender': 'admin',
+                    'message': 'Hello, this is Linda the Hepatology Clinic admin desk. How can I help you today?'
+                }
+            ]
+        }
+        
+        # Define the path in GCS
+        file_path = f"patient_data/{patient_id}/pre_consultation_chat.json"
+        
+        # Convert to JSON string
+        json_content = json.dumps(default_chat_state, indent=4)
+        
+        # Overwrite the file in GCS using the agent's bucket manager
+        chat_agent.gcs.create_file_from_string(
+            json_content, 
+            file_path, 
+            content_type="application/json"
+        )
+        
+        logger.info(f"Chat history reset for patient: {patient_id}")
+        
+        return {
+            "status": "success", 
+            "message": "Chat history has been reset.",
+            "current_state": default_chat_state
+        }
+
+    except Exception as e:
+        logger.error(f"Error resetting chat for {patient_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset chat: {str(e)}")
 
 # --- Run Block ---
 if __name__ == "__main__":
