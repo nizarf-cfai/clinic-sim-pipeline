@@ -18,3 +18,4 @@ grpcio
 google-cloud-storage
 google-cloud-speech
 mutagen
+pillow
