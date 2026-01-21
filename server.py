@@ -230,6 +230,58 @@ async def process_pre_consult(patient_id: str):
     except Exception as e:
         logger.error(f"Error processing patient for {patient_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to process patient: {str(e)}")
+    
+@app.get("/process/{patient_id}/board")
+async def process_board(patient_id: str):
+    """
+    Resets the chat history for a specific patient to the default initial greeting.
+    """
+    try:
+        data_process = my_agents.RawDataProcessing()
+        await data_process.process_dashboard_content(patient_id)
+        
+        return {
+            "status": "success", 
+            "message": "Board objects have been processed."
+            }
+
+    except Exception as e:
+        logger.error(f"Error processing patient for {patient_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process patient: {str(e)}")
+    
+@app.get("/process/{patient_id}/board-update")
+async def process_board_update(patient_id: str):
+    """
+    Resets the chat history for a specific patient to the default initial greeting.
+    """
+    try:
+        data_process = my_agents.RawDataProcessing()
+        await data_process.process_board_object(patient_id)
+        
+        return {
+            "status": "success", 
+            "message": "Board objects have been processed."
+            }
+
+    except Exception as e:
+        logger.error(f"Error processing patient for {patient_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process patient: {str(e)}")
+
+@app.get("/data/{patient_id}/{file_path}")
+async def process_board_update(patient_id: str,file_path: str):
+    """
+    Resets the chat history for a specific patient to the default initial greeting.
+    """
+    try:
+        blob_file_path = f"patient_data/{patient_id}/{file_path}"
+        content_str = chat_agent.gcs.read_file_as_string(blob_file_path)
+        data_json = json.loads(content_str)
+        
+        return data_json
+
+    except Exception as e:
+        logger.error(f"Error get data {file_path}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process patient: {str(e)}")
 
 @app.get("/image/{patient_id}/{file_path}")
 async def get_image(patient_id:str, file_path: str):

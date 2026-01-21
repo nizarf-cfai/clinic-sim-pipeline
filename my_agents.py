@@ -1032,19 +1032,20 @@ class RawDataProcessing(BaseLogicAgent):
         return json.loads(response.text)
     
     async def process_raw_data(self, patient_id: str):
-        pre_consult_chat_path = f"patient_data/{patient_id}/pre_consultation_chat.json"
-        content_str = self.gcs.read_file_as_string(pre_consult_chat_path)
-        history_data = json.loads(content_str)
+        # pre_consult_chat_path = f"patient_data/{patient_id}/pre_consultation_chat.json"
+        # content_str = self.gcs.read_file_as_string(pre_consult_chat_path)
+        # history_data = json.loads(content_str)
+
+        file_list = self.gcs.list_files("patient_data/P0001/raw_data/")
 
         results = []
-        for c in history_data.get("conversation", []):
-            if c.get("sender") == "patient" and c.get("attachments"):
-                for att in c["attachments"]:
-                    file_path = f"patient_data/{patient_id}/raw_data/{att}"
-                    result = await self.get_text_doc(file_path)
-                    result.update({"source_file": att})
-                    results.append(result)
-                    print(f"Processed {att}: {result}")
+        
+        for att in file_list:
+            file_path = f"patient_data/{patient_id}/raw_data/{att}"
+            result = await self.get_text_doc(file_path)
+            result.update({"source_file": att})
+            results.append(result)
+            print(f"Processed {att}: {result}")
 
         self.gcs.create_file_from_string(
             json.dumps(results, indent=4),
@@ -1052,48 +1053,853 @@ class RawDataProcessing(BaseLogicAgent):
             content_type="application/json"
         )
 
+    async def get_raw_context(self, patient_id: str):
+        raw_data = self.gcs.read_file_as_string(f"patient_data/{patient_id}/parsed_raw_data.json")
+        raw_objects = json.loads(raw_data)
 
-    async def process_referral_board(self,referal_raw_object):
+        pre_consultation_chat_path = self.gcs.read_file_as_string(f"patient_data/{patient_id}/pre_consultation_chat.json")
+        pre_consultation_chat = json.loads(pre_consultation_chat_path)
 
-        referral_text = referal_raw_object.get("content","")
+        return {
+            "raw_objects": raw_objects,
+            "pre_consultation_chat": pre_consultation_chat
+        }
 
-        with open("system_prompts/referral_parser.md", "r", encoding="utf-8") as f:
-            system_instruction = f.read()
-
-        # 2. Load Response Schema
-        with open("response_schema/referral_parser.json", "r", encoding="utf-8") as f:
-            response_schema = json.load(f)
-
-        # 3. Prepare Prompt
-        prompt_text = (
-            "Analyze the following referral letter text. "
-            "Extract the date, visit type, provider, study type, specialty, and data source. "
-            "Populate the 'highlights' array with exact text snippets used to derive these values."
-        )
-
-        # 4. Prepare content parts (Instructions + The Raw Text)
-        contents = [
-            prompt_text,
-            referral_text
+    async def process_dashboard_content(self, patient_id):
+        # 1. Define tasks
+        tasks = [
+            self.process_referral_board(patient_id),
+            self.process_image_board(patient_id),
+            self.process_encounter_board(patient_id),
+            self.process_dashboard_patient_context(patient_id),
+            self.process_dashboard_analysis_object(patient_id)
         ]
 
-        # 5. Call Model
-        response = await self.client.aio.models.generate_content(
-            model=MODEL, 
-            contents=contents,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json", 
-                response_schema=response_schema, 
-                system_instruction=system_instruction, 
-                temperature=0.1 # Low temp for factual extraction
-            )
+        # 2. Run in parallel
+        results = await asyncio.gather(*tasks)
+
+        # 3. Loop and print
+        print("First batch of dashboard processing results:")
+        for result in results:
+            print(result)
+
+
+        tasks = [
+            self.dashboard_latest_labs(patient_id),
+            self.dashboard_lab_chart_data(patient_id),
+            self.dashboard_pre_diagnosis(patient_id),
+            self.get_encounters_track(patient_id),
+            self.get_medication_track(patient_id),
+            self.get_lab_track(patient_id),
+            self.get_risk_event_track(patient_id),
+        ]
+
+        # 2. Run in parallel
+        results = await asyncio.gather(*tasks)
+
+        # 3. Loop and print
+        print("First batch of dashboard processing results:")
+        for result in results:
+            print(result)
+            
+        return results
+
+    async def process_board_object(self, patient_id):
+        file_list = self.gcs.list_files(f"patient_data/{patient_id}/board_items/")
+
+        board_objects = []
+
+        for file in file_list:
+            file_path = f"patient_data/{patient_id}/board_items/{file}"
+            raw_data = self.gcs.read_file_as_string(file_path)
+            raw_objects = json.loads(raw_data)
+
+
+            if "referral.json" in file:
+                rec = {
+                    "id": "referral-doctor-info",
+                    "date" : raw_objects.get("date",""),
+                    "visitType" : raw_objects.get("visitType",""),
+                    "provider" : raw_objects.get("provider",""),
+                    "specialty" : raw_objects.get("specialty",""),
+                    "rawText" : raw_objects.get("rawText",""),
+                    "dataSource" : raw_objects.get("dataSource",""),
+                    "highlights" : raw_objects.get("highlights",[]),
+                }
+                board_objects.append(rec)
+                rec2 = {
+                    "id": "referral-letter-image",
+                    "date" : raw_objects.get("date",""),
+                    "studyType" : raw_objects.get("studyType",""),
+                    "provider" : raw_objects.get("provider",""),
+                    "specialty" : raw_objects.get("specialty",""),
+                    "imageUrl" : raw_objects.get("imageUrl",""),
+                    "dataSource" : raw_objects.get("dataSource",""),
+                }
+                board_objects.append(rec)
+            elif "raw_images.json" in file:
+                board_objects += raw_objects
+            elif "encounters.json" in file:
+                for i, e in enumerate(raw_objects):
+                    e['id'] = f"single-encounter-{i+1}"
+                    board_objects.append(e)
+            elif "patient_context.json" in file:
+                raw_objects['id'] = "dashboard-item-patient-context"
+                board_objects.append(raw_objects)
+
+                raw_objects['id'] = "sidebar-1"
+                board_objects.append(raw_objects)
+            elif "dashboard_analysis.json" in file:
+                raw_objects['id'] = "adverse-event-analytics"
+                board_objects.append(raw_objects)
+            elif "dashboard_lab_latest.json" in file:
+                board_objects.append({
+                    "id": "dashboard-item-lab-table",
+                    "labResults" : raw_objects
+                })
+            elif "dashboard_lab_chart.json" in file:
+                board_objects.append({
+                    "id": "dashboard-item-lab-chart",
+                    "chartData" : raw_objects
+                })
+            elif "dashboard_pre_diagnosis.json" in file:
+                board_objects.append({
+                    "id": "differential-diagnosis",
+                    "differential" : raw_objects
+                })
+            elif "dashboard_encounters_track.json" in file:
+                board_objects.append({
+                    "id": "encounter-track-1",
+                    "encounters" : raw_objects
+                })
+            elif "dashboard_medication_track.json" in file:
+                board_objects.append({
+                    "id": "medication-track-1",
+                    "data" : raw_objects
+                })
+            elif "dashboard_lab_track.json" in file:
+                board_objects.append({
+                    "id": "lab-track-1",
+                    "data" : raw_objects
+                })
+            elif "dashboard_risk_event_track.json" in file:
+                board_objects.append({
+                    "id": "risk-track-1",
+                    "risks" : raw_objects.get("risks")
+                })
+                board_objects.append({
+                    "id": "key-events-track-1",
+                    "events" : raw_objects.get("events")
+                })
+            
+        self.gcs.create_file_from_string(
+            json.dumps(board_objects, indent=4),
+            f"patient_data/{patient_id}/board_objects.json",
+            content_type="application/json"
         )
 
-        
+            
 
-        result_obj = json.loads(response.text)
-        referral_doctor = {
-            "date" : result_obj.get("date",""),
-        }
-        
-        return json.loads(response.text)
+
+    async def process_referral_board(self, patient_id):
+
+        try:
+            raw_data = self.gcs.read_file_as_string(f"patient_data/{patient_id}/parsed_raw_data.json")
+            raw_objects = json.loads(raw_data)
+
+            referal_raw_object = None
+            for raw in raw_objects:
+                if raw.get('type') == "referral":
+                    referal_raw_object = raw
+                    break
+
+            if not referal_raw_object:
+                return {
+                    "status": "no referral found"
+                }
+            
+            referral_text = referal_raw_object.get("content","")
+
+            with open("system_prompts/board_referral_parser.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/board_referral_parser.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Prepare Prompt
+            prompt_text = (
+                "Analyze the following referral letter text. "
+                "Extract the date, visit type, provider, study type, specialty, and data source. "
+                "Populate the 'highlights' array with exact text snippets used to derive these values."
+            )
+
+            # 4. Prepare content parts (Instructions + The Raw Text)
+            contents = [
+                prompt_text,
+                referral_text
+            ]
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.1 # Low temp for factual extraction
+                )
+            )
+
+            
+
+            result_obj = json.loads(response.text)
+            result_obj['rawText'] = referral_text
+
+
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/referral.json",
+                content_type="application/json"
+            )
+
+
+
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in process_referral_board: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    async def process_image_board(self, patient_id):
+        try:
+            raw_data = self.gcs.read_file_as_string(f"patient_data/{patient_id}/parsed_raw_data.json")
+            raw_objects = json.loads(raw_data)
+
+            image_enc_id_count = 1
+            image_lab_id_count = 1
+            image_imaging_id_count = 1
+            results = []
+            for raw in raw_objects:
+                if raw.get('type') == "encounter":
+                    rec_id = f"raw-encounter-image-{image_enc_id_count}"
+                    data_ = {
+                        "id" : rec_id,
+                        "imageUrl" : raw.get("source_file")
+                    }
+                    results.append(data_)
+                    image_enc_id_count += 1
+
+                elif raw.get('type') == "lab":
+                    rec_id = f"raw-lab-image-{image_lab_id_count}"
+                    data_ = {
+                        "id" : rec_id,
+                        "imageUrl" : raw.get("source_file")
+                    }
+                    results.append(data_)
+                    image_lab_id_count += 1
+                elif raw.get('type') == "imaging":
+                    rec_id = f"raw-lab-image-radiology-{image_imaging_id_count}"
+                    data_ = {
+                        "id" : rec_id,
+                        "imageUrl" : raw.get("source_file")
+                    }
+                    results.append(data_)
+                    image_imaging_id_count += 1
+
+            self.gcs.create_file_from_string(
+                json.dumps(results, indent=4),
+                f"patient_data/{patient_id}/board_items/raw_images.json",
+                content_type="application/json"
+            )
+
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in process_image_board: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    async def process_encounter_board(self, patient_id):
+        try:
+            raw_data = self.gcs.read_file_as_string(f"patient_data/{patient_id}/parsed_raw_data.json")
+            raw_objects = json.loads(raw_data)
+
+
+            encounter_text = ""
+            for raw in raw_objects:
+                if raw.get('type') == "encounter":
+                    encounter_text += "ENCOUNTER\n" +  raw.get("content", "") + "\n\n"
+
+                
+
+            with open("system_prompts/encounter_generator.md", "r", encoding="utf-8") as f: 
+                system_instruction = f.read()
+            with open("response_schema/encounter.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Prepare Prompt
+            prompt_text = (
+                "Analyze the following encounter note text. "
+                "Extract the date, visit type, provider, study type, specialty, and etc. "
+            )
+
+            # 4. Prepare content parts (Instructions + The Raw Text)
+            contents = [
+                prompt_text,
+                encounter_text
+            ]
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.1 # Low temp for factual extraction
+                )
+            )
+
+            
+
+            result_obj = json.loads(response.text)
+
+            
+
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/encounters.json",
+                content_type="application/json"
+            )
+
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in process_encounter_board: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    async def process_dashboard_patient_context(self, patient_id: str):
+        try:
+            with open("system_prompts/dashboard_patient_context.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_patient_context.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+
+            context_payload = await self.get_raw_context(patient_id)
+
+
+            prompt_content = (
+                f"### DATA SOURCES ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Analyze the data above to populate the Clinical Dashboard.\n"
+                f"1. **Synthesize:** Combine the official history (Encounters) with new self-reported info (Chat).\n"
+                f"2. **Medication Logic:** If the patient mentions taking OTC meds (like Tylenol) in the chat, ADD them to the medication timeline, estimating dates based on the conversation.\n"
+                f"3. **Risk Assessment:** Determine risk based on the severity of symptoms described in the Chat (e.g., 'Yellow eyes' = High).\n"
+                f"4. **Problem List:** Include both chronic conditions and the acute symptoms they are complaining about now."
+            )
+
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.2 # Low temperature for factual extraction
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/patient_context.json",
+                content_type="application/json"
+            )
+
+
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in proocess_dashboard_patient_context: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    async def process_dashboard_analysis_object(self, patient_id: str):
+        try:
+            # 1. Load System Instruction
+            with open("system_prompts/dashboard_analysis.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_analysis.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Retrieve Context (Raw Data + Pre-Consult Data)
+            # Assuming this method returns a dict with keys like 'labs', 'medications', 'chat_transcript', etc.
+            context_payload = await self.get_raw_context(patient_id) 
+
+            # 4. Construct Prompt
+            prompt_content = (
+                f"### PATIENT DATA CONTEXT ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Act as an expert Clinical Toxicologist and Hepatologist.\n"
+                f"Analyze the provided patient data (History, Labs, Symptoms, Medications) to generate a safety analysis.\n\n"
+                f"1. **Adverse Events:** Identify specific clinical events (e.g., Hepatitis, Rash) based on abnormal labs and symptoms.\n"
+                f"2. **RUCAM Assessment:** Perform a causality assessment for the suspected drug-induced liver injury. Fill the table row-by-row based on standard RUCAM criteria (Time to onset, Risk factors, Exclusion of other causes).\n"
+                f"3. **CTCAE Grading:** Grade the severity of lab abnormalities (ALT, AST, Bilirubin, INR) according to CTCAE v5.0 criteria.\n"
+                f"4. **Reasoning:** Synthesize the findings into a cohesive clinical narrative justifying your scoring."
+            )
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL,
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.1 # Very low temperature for precise scoring and grading
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/dashboard_analysis.json",
+                content_type="application/json"
+            )
+
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in process_dashboard_analysis_object: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+
+    async def dashboard_latest_labs(self, patient_id: str):
+        try:
+            # 1. Load System Instruction
+            with open("system_prompts/dashboard_lab_latest.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_lab_latest.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Retrieve Raw Patient Context
+            context_payload = await self.get_raw_context(patient_id)
+
+            # 4. Construct Prompt
+            # We pass the raw data and ask it to filter for the most recent values only.
+            prompt_content = (
+                f"### PATIENT RECORDS ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Review the patient records above. Extract the LATEST available result for every distinct lab test found.\n"
+                f"1. **Filter:** Ignore older entries if a newer one exists for the same test.\n"
+                f"2. **Standardize:** Normalize test names (e.g., 'SGPT' -> 'ALT').\n"
+                f"3. **Analyze:** Compare the value against the normal range to determine the 'status' (normal, high, low, critical).\n"
+                f"4. **History:** If a previous value exists in the history for the same test, populate 'previousValue'."
+            )
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.0 # Zero temperature for strict factual extraction
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/dashboard_lab_latest.json",
+                content_type="application/json"
+            )
+
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in dashboard_latest_labs: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    async def dashboard_lab_chart_data(self, patient_id: str):
+        try:
+            # 1. Load System Instruction
+            with open("system_prompts/dashboard_lab_chart.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_lab_chart.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Retrieve Raw Patient Context
+            context_payload = await self.get_raw_context(patient_id)
+
+            # 4. Construct Prompt
+            prompt_content = (
+                f"### PATIENT DATA CONTEXT ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Analyze the patient data to build historical trend lines for laboratory values.\n"
+                f"1. **Extraction:** Identify every lab test that has at least one result.\n"
+                f"2. **Aggregation:** Group results by biomarker name (e.g., collect all 'ALT' values together).\n"
+                f"3. **Chronology:** Sort the data points inside each biomarker group by date (Oldest -> Newest).\n"
+                f"4. **Details:** For every data point, extract the Date, Value, and the specific Unit of measurement (e.g., 'U/L', 'mg/dL').\n"
+                f"5. **Standardization:** Convert all dates to 'YYYY-MM-DD'. Ensure values are numbers.\n"
+                f"6. **Key Focus:** Prioritize Liver Function Tests (ALT, AST, Bilirubin, INR) but include others if found."
+            )
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.0 # Zero temp for strict extraction
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/dashboard_lab_chart.json",
+                content_type="application/json"
+            )
+
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in dashboard_lab_chart_data: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    async def dashboard_pre_diagnosis(self, patient_id: str):
+        try:
+            # 1. Load System Instruction
+            with open("system_prompts/dashboard_pre_diagnosis.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_pre_diagnosis.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Retrieve Raw Patient Context
+            context_payload = await self.get_raw_context(patient_id)
+
+            # 4. Construct Prompt
+            prompt_content = (
+                f"### PATIENT DATA CONTEXT ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Act as an expert Diagnostician. Analyze the patient's symptoms, history, and laboratory results.\n"
+                f"1. **Differential Diagnosis:** Generate a list of potential diagnoses that explain the clinical presentation.\n"
+                f"2. **Probability Assessment:** Assign a probability status (low, medium, high) to each based on the strength of the evidence.\n"
+                f"   - **High:** Supported by specific lab values or pathognomonic symptoms.\n"
+                f"   - **Medium:** Plausible but lacks definitive confirmation or shares symptoms with other conditions.\n"
+                f"   - **Low:** Unlikely but cannot be fully ruled out without further testing.\n"
+                f"3. **Reasoning:** In the 'note', briefly explain *why* you chose that diagnosis and status, citing specific data points (e.g., 'ALT > 1000', 'History of alcohol use')."
+            )
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.1 # Low temp for evidence-based reasoning
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/dashboard_pre_diagnosis.json",
+                content_type="application/json"
+            )
+            
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in dashboard_pre_diagnosis: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    async def get_encounters_track(self, patient_id: str):
+        try:
+            # 1. Load System Instruction
+            with open("system_prompts/dashboard_encounters_track.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_encounters_track.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Retrieve Raw Patient Context
+            # This payload contains the raw notes, previous encounters, and history
+            context_payload = await self.get_raw_context(patient_id)
+
+            encounters_parsed_text = self.gcs.read_file_as_string(f"patient_data/{patient_id}/board_items/encounters.json")
+            encounters_object = json.loads(encounters_parsed_text)
+
+            # 4. Construct Prompt
+            prompt_content = (
+                f"### PATIENT RECORDS ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### Encounters parsed ###\n"
+                f"{json.dumps(encounters_object, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Act as a Medical Historian. Construct a chronological timeline of patient encounters based on the records provided.\n"
+                f"1. **Extraction:** identify all distinct interactions (Clinic Visits, Telehealth, ER Admissions, Discharge).\n"
+                f"2. **Ordering:** Sort them strictly by date (Oldest -> Newest) and assign a sequential `encounter_no`.\n"
+                f"3. **Details:** Extract the Provider, Chief Complaint, Impression/Diagnosis, and Differential Diagnosis for each visit.\n"
+                f"4. **Medications:** List medications specifically *started*, *stopped*, or *modified* during that encounter.\n"
+                f"5. **Narrative Link (Casual Reason):** For the `casual_reason` field, explain the clinical significance of this encounter in the context of the patient's *current* major issue (e.g., how did this visit contribute to the progression of the disease, missed diagnosis, or treatment timeline?)."
+            )
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.1 # Low temp for factual accuracy
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/dashboard_encounters_track.json",
+                content_type="application/json"
+            )
+
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in get_encounters_track: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    async def get_medication_track(self, patient_id: str):
+        try:
+            # 1. Load System Instruction
+            with open("system_prompts/dashboard_medication_track.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_medication_track.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Retrieve Contexts
+            # Get raw data (notes, labs, etc.)
+            context_payload = await self.get_raw_context(patient_id)
+            
+            # Get the structured encounters list created by the previous agent
+            encounters_parsed_text = self.gcs.read_file_as_string(f"patient_data/{patient_id}/board_items/encounters.json")
+            encounters_object = json.loads(encounters_parsed_text)
+
+            # 4. Construct Prompt
+            # We provide the structured encounters to help the AI map medications to specific dates/visits
+            prompt_content = (
+                f"### RAW PATIENT RECORDS ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### STRUCTURED ENCOUNTERS TIMELINE ###\n"
+                f"{json.dumps(encounters_object, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Act as an expert Clinical Pharmacist. Construct a medication timeline based on the records provided.\n"
+                f"1. **Encounters Reference:** First, extract the simplified list of encounters (Number and Date) to serve as the timeline X-axis.\n"
+                f"2. **Medication Extraction:** Identify all medications mentioned in the records.\n"
+                f"3. **Timeline Logic (Start/End):**\n"
+                f"   - **Start Date:** Use the date of the encounter where the drug was prescribed or first reported.\n"
+                f"   - **End Date:** Calculate based on duration (e.g., '10-day course' started Oct 30 -> End Nov 09). If the med is ongoing or PRN, set end date to the date of the *latest* encounter or null if unknown.\n"
+                f"4. **Details:** Extract Dose and Indication (reason for taking).\n"
+                f"5. **Over the Counter:** Do not ignore OTC drugs (like Acetaminophen/Tylenol) if the patient mentions taking them."
+            )
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.0 # Zero temp for precise date calculation
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/dashboard_medication_track.json",
+                content_type="application/json"
+            )
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in get_medication_track: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    async def get_lab_track(self, patient_id: str):
+        try:
+            # 1. Load System Instruction
+            with open("system_prompts/dashboard_lab_track.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_lab_track.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Retrieve Raw Patient Context
+            context_payload = await self.get_raw_context(patient_id)
+
+            # 4. Construct Prompt
+            prompt_content = (
+                f"### PATIENT RECORDS ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Act as a Clinical Data Specialist. Extract a longitudinal track of laboratory values.\n"
+                f"1. **Grouping:** Group all results by the specific biomarker name (e.g., combine 'SGPT' and 'ALT').\n"
+                f"2. **Metadata:** For each biomarker, identify the measurement `unit` and the `referenceRange` (min/max) used in the reports.\n"
+                f"3. **Data Points:** For every test result found, extract:\n"
+                f"   - The value (as a number).\n"
+                f"   - The precise timestamp `t` in ISO 8601 format (YYYY-MM-DDTHH:MM:SS).\n"
+                f"4. **Time Handling:** If the specific time (HH:MM:SS) is not mentioned in the report, assume '00:00:00' or the general time of the visit.\n"
+                f"5. **Sorting:** Ensure the `values` array is sorted chronologically (Oldest -> Newest)."
+            )
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.0 # Zero temp for precise number/date extraction
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/dashboard_lab_track.json",
+                content_type="application/json"
+            )
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in get_lab_track: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    async def get_risk_event_track(self, patient_id: str):
+        try:
+            # 1. Load System Instruction
+            with open("system_prompts/dashboard_risk_event_track.md", "r", encoding="utf-8") as f:
+                system_instruction = f.read()
+
+            # 2. Load Response Schema
+            with open("response_schema/dashboard_risk_event_track.json", "r", encoding="utf-8") as f:
+                response_schema = json.load(f)
+
+            # 3. Retrieve Raw Patient Context
+            context_payload = await self.get_raw_context(patient_id)
+            encounters_parsed_text = self.gcs.read_file_as_string(f"patient_data/{patient_id}/board_items/encounters.json")
+            encounters_object = json.loads(encounters_parsed_text)
+            # 4. Construct Prompt
+            prompt_content = (
+                f"### PATIENT RECORDS ###\n"
+                f"{json.dumps(context_payload, indent=2)}\n\n"
+                f"### STRUCTURED ENCOUNTERS TIMELINE ###\n"
+                f"{json.dumps(encounters_object, indent=2)}\n\n"
+                f"### INSTRUCTION ###\n"
+                f"Act as a Clinical Risk Manager. Analyze the patient records to generate two aligned timelines: Risk Progression and Key Events.\n\n"
+                f"1. **Risk Analysis:** For every significant encounter or date, calculate a `riskScore` (0-10 scale) based on clinical severity.\n"
+                f"   - **1-3 (Low):** Stable, minor infection, baseline.\n"
+                f"   - **4-6 (Medium):** New unexplained symptoms, polypharmacy, medication changes.\n"
+                f"   - **7-10 (High):** Critical lab values, organ dysfunction signs (jaundice), emergency visits.\n\n"
+                f"2. **Event Extraction:** Identify pivotal moments that drove the clinical narrative.\n"
+                f"   - Include: Medication starts/stops, Symptom onset (subjective), Lab spikes (objective), Referrals.\n"
+                f"   - Provide a concise `note` explaining the context.\n\n"
+                f"3. **Timestamps:** Extract precise timestamps `t` (ISO 8601). If only a date is available, use T00:00:00 or an estimated time based on the visit type."
+            )
+
+            # 5. Call Model
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.1 # Low temp for consistent scoring and date extraction
+                )
+            )
+            result_obj = json.loads(response.text)
+            self.gcs.create_file_from_string(
+                json.dumps(result_obj, indent=4),
+                f"patient_data/{patient_id}/board_items/dashboard_risk_event_track.json",
+                content_type="application/json"
+            )
+            
+            return {
+                "status": "success"
+            }
+        except Exception as e:
+            print(f"Error in get_risk_event_track: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+

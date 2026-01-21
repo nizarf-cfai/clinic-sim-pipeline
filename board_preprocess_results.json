@@ -1,0 +1,1039 @@
+[
+    {
+        "file": "dashboard_analysis.json",
+        "data": {
+            "adverseEvents": [
+                {
+                    "event": "Hepatocellular Injury",
+                    "severity": "Severe",
+                    "description": "Elevated AST (150 U/L) and ALT (110 U/L) with a high AST/ALT ratio, indicative of hepatocellular damage."
+                },
+                {
+                    "event": "Cholestatic Injury",
+                    "severity": "Moderate",
+                    "description": "Elevated Total Bilirubin (6.8 mg/dL) and INR (2.1), suggesting impaired bile excretion and synthetic dysfunction."
+                },
+                {
+                    "event": "Hepatic Encephalopathy",
+                    "severity": "Severe",
+                    "description": "Patient presents with confusion, forgetfulness, and disorientation, consistent with hepatic encephalopathy."
+                },
+                {
+                    "event": "Ascites",
+                    "severity": "Severe",
+                    "description": "Significant abdominal distension, positive fluid wave, and shifting dullness, indicative of severe ascites."
+                },
+                {
+                    "event": "Edema",
+                    "severity": "Moderate",
+                    "description": "Bilateral pitting edema up to mid-shin, consistent with fluid retention."
+                },
+                {
+                    "event": "Hypotension",
+                    "severity": "Grade 1",
+                    "description": "Mild hypotension noted with BP 100/65 mmHg."
+                },
+                {
+                    "event": "Tachycardia",
+                    "severity": "Grade 1",
+                    "description": "Tachycardia noted with HR 100 bpm."
+                }
+            ],
+            "rucam_ctcae_analysis": {
+                "rucam": {
+                    "title": "Roussel Uclaf Causality Assessment Method (RUCAM)",
+                    "columns": [
+                        "Criterion",
+                        "Findings",
+                        "Score",
+                        "Explanation"
+                    ],
+                    "rows": [
+                        [
+                            "1",
+                            "Exclusion of other causes",
+                            "+1",
+                            "Viral hepatitis, autoimmune hepatitis, biliary obstruction, and other known causes of liver injury are not explicitly ruled out but the clinical presentation strongly suggests decompensated alcoholic cirrhosis."
+                        ],
+                        [
+                            "2",
+                            "Time to onset of symptoms after starting drug",
+                            "0",
+                            "The patient has a known history of alcoholic liver cirrhosis, and the current presentation is an acute decompensation. No new drug was initiated recently that could be assessed for time to onset."
+                        ],
+                        [
+                            "3",
+                            "Concomitant medications",
+                            "0",
+                            "The patient is on multiple medications (Lactulose, Furosemide, Propranolol) for his known liver condition. Alcohol consumption is a significant confounding factor."
+                        ],
+                        [
+                            "4",
+                            "Risk factors for liver disease",
+                            "+1",
+                            "Patient is 54 years old (Age > 55 is +1, but 54 is close) and has a history of heavy alcohol consumption (20 years, 60 units/week), which is a known risk factor for liver disease."
+                        ],
+                        [
+                            "5",
+                            "Response to withdrawal of drug",
+                            "0",
+                            "Not applicable as no specific drug is being suspected for DILI; the presentation is a decompensation of known alcoholic liver cirrhosis."
+                        ],
+                        [
+                            "6",
+                            "Rechallenge",
+                            "0",
+                            "Not applicable."
+                        ],
+                        [
+                            "7",
+                            "Other hepatotoxic drugs",
+                            "0",
+                            "No other hepatotoxic drugs are identified as being newly introduced or at high doses."
+                        ],
+                        [
+                            "8",
+                            "Specific laboratory findings",
+                            "+1",
+                            "Elevated AST (150 U/L), ALT (110 U/L), Total Bilirubin (6.8 mg/dL), INR (2.1), and low Albumin (2.2 g/dL) are consistent with liver injury and synthetic dysfunction."
+                        ]
+                    ],
+                    "total_score": 3,
+                    "causality_category": "Possible"
+                },
+                "ctcae": {
+                    "title": "Common Terminology Criteria for Adverse Events (CTCAE) v5.0 - Liver",
+                    "columns": [
+                        "Lab Parameter",
+                        "Value",
+                        "CTCAE Grade",
+                        "Criteria"
+                    ],
+                    "rows": [
+                        [
+                            "AST",
+                            "150 U/L",
+                            "Grade 2",
+                            "3 x ULN - 5 x ULN (ULN=40)"
+                        ],
+                        [
+                            "ALT",
+                            "110 U/L",
+                            "Grade 2",
+                            "3 x ULN - 5 x ULN (ULN=56)"
+                        ],
+                        [
+                            "Total Bilirubin",
+                            "6.8 mg/dL",
+                            "Grade 3",
+                            "> 3 x ULN (ULN=1.2)"
+                        ],
+                        [
+                            "INR",
+                            "2.1",
+                            "Grade 3",
+                            "INR > 3.0 (or > 2 x baseline if baseline known)"
+                        ],
+                        [
+                            "Albumin",
+                            "2.2 g/dL",
+                            "Grade 3",
+                            "Less than 2.8 g/dL"
+                        ],
+                        [
+                            "Creatinine",
+                            "1.3 mg/dL",
+                            "Grade 1",
+                            "1.0 x ULN - 1.5 x ULN (ULN=1.2)"
+                        ]
+                    ],
+                    "overall_grade": "Grade 3"
+                },
+                "reasoning": "The patient presents with acute decompensation of known alcoholic liver cirrhosis, characterized by ascites, hepatic encephalopathy, and significant derangements in liver function tests. While the RUCAM score is low (3), classifying the event as 'Possible' DILI, this is primarily due to the strong confounding factor of chronic alcohol abuse and the lack of a clear temporal relationship with a new drug. The clinical picture is overwhelmingly consistent with decompensated alcoholic liver disease rather than a de novo drug-induced liver injury. The laboratory values, particularly the elevated bilirubin and INR, along with the clinical signs of encephalopathy and ascites, meet CTCAE Grade 3 criteria for liver dysfunction. The elevated AST and ALT also indicate hepatocellular injury, grading as CTCAE Grade 2. The overall severity of the liver dysfunction and its clinical manifestations warrants a CTCAE Grade 3 classification."
+            }
+        }
+    },
+    {
+        "file": "dashboard_encounters_track.json",
+        "data": [
+            {
+                "encounter_no": 1,
+                "date": "2023-10-26",
+                "type": "Imaging",
+                "provider": "Dr. A. Ray",
+                "chief_complaint": "Abdominal distension, altered mental status, and history of alcohol abuse, concerning for decompensated liver disease.",
+                "medications": [],
+                "impression": "Decompensated alcoholic liver cirrhosis with significant ascites. Splenomegaly. Consistent with hepatic encephalopathy secondary to liver dysfunction.",
+                "differential_diagnosis": [],
+                "notes": "Ultrasound findings consistent with chronic liver disease, significant ascites, and splenomegaly.",
+                "casual_reason": "This imaging report provides objective evidence of decompensated alcoholic liver cirrhosis and significant ascites, confirming the severity of the patient's condition and supporting the clinical suspicion of hepatic encephalopathy."
+            },
+            {
+                "encounter_no": 2,
+                "date": "2026-01-19",
+                "type": "Urgent Care Visit",
+                "provider": "Dr. Anya Sharma",
+                "chief_complaint": "Return of ascites, confusion, and poor medication compliance with recent alcohol relapse.",
+                "medications": [
+                    "Lactulose (Continued)",
+                    "Furosemide (Continued)",
+                    "Propranolol (Continued)"
+                ],
+                "impression": "Decompensated Alcoholic Liver Cirrhosis with Ascites and Hepatic Encephalopathy",
+                "differential_diagnosis": [
+                    "Alcoholic Hepatitis",
+                    "Decompensated Heart Failure",
+                    "Malignancy"
+                ],
+                "notes": "Patient presented with worsening ascites, confusion, and poor medication compliance due to alcohol relapse. Advised urgent hospital referral. Medications adjusted.",
+                "casual_reason": "This visit documents the acute decompensation of the patient's known alcoholic liver cirrhosis, directly linked to poor medication compliance and a recent alcohol relapse, leading to worsening ascites and hepatic encephalopathy."
+            },
+            {
+                "encounter_no": 3,
+                "date": "2026-01-20",
+                "type": "Referral",
+                "provider": "Dr. Anya Sharma",
+                "chief_complaint": "Urgent assessment and management of decompensated cirrhosis with ascites and hepatic encephalopathy.",
+                "medications": [],
+                "impression": "Decompensated alcoholic liver cirrhosis (Child-Pugh B) with ascites and hepatic encephalopathy.",
+                "differential_diagnosis": [],
+                "notes": "Referral to Hepatology Registrar for urgent assessment and management, including consideration for hospital admission due to acute decompensation, alcohol relapse, and medication non-compliance.",
+                "casual_reason": "This referral highlights the critical state of the patient's liver disease, necessitating specialist intervention due to acute decompensation, alcohol relapse, and medication non-compliance, indicating a high risk of further complications."
+            }
+        ]
+    },
+    {
+        "file": "dashboard_lab_chart.json",
+        "data": [
+            {
+                "biomarker": "AST",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 150.0,
+                        "unit": "U/L"
+                    }
+                ]
+            },
+            {
+                "biomarker": "ALT",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 110.0,
+                        "unit": "U/L"
+                    }
+                ]
+            },
+            {
+                "biomarker": "Total Bilirubin",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 6.8,
+                        "unit": "mg/dL"
+                    }
+                ]
+            },
+            {
+                "biomarker": "Albumin",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 2.2,
+                        "unit": "g/dL"
+                    }
+                ]
+            },
+            {
+                "biomarker": "Prothrombin Time (PT) / INR",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 2.1,
+                        "unit": "INR"
+                    }
+                ]
+            },
+            {
+                "biomarker": "Sodium",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 132.0,
+                        "unit": "mmol/L"
+                    }
+                ]
+            },
+            {
+                "biomarker": "Potassium",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 4.5,
+                        "unit": "mmol/L"
+                    }
+                ]
+            },
+            {
+                "biomarker": "Creatinine",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 1.3,
+                        "unit": "mg/dL"
+                    }
+                ]
+            },
+            {
+                "biomarker": "White Blood Cell Count",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 9.8,
+                        "unit": "10^3/uL"
+                    }
+                ]
+            },
+            {
+                "biomarker": "Hemoglobin",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 10.2,
+                        "unit": "g/dL"
+                    },
+                    {
+                        "date": "2025-07-19",
+                        "value": 125.0,
+                        "unit": "10^3/uL"
+                    }
+                ]
+            },
+            {
+                "biomarker": "Platelets",
+                "data": [
+                    {
+                        "date": "2025-07-19",
+                        "value": 125.0,
+                        "unit": "10^3/uL"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "file": "dashboard_lab_latest.json",
+        "data": [
+            {
+                "name": "WBC",
+                "value": 9.8,
+                "unit": "10^3/uL",
+                "normalRange": "3.4 - 10.8",
+                "status": "normal",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "Hemoglobin",
+                "value": 10.2,
+                "unit": "g/dL",
+                "normalRange": "13.5 - 17.5",
+                "status": "low",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "Platelets",
+                "value": 125.0,
+                "unit": "10^3/uL",
+                "normalRange": "150.0 - 450.0",
+                "status": "low",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "AST",
+                "value": 150.0,
+                "unit": "U/L",
+                "normalRange": "10.0 - 40.0",
+                "status": "high",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "ALT",
+                "value": 110.0,
+                "unit": "U/L",
+                "normalRange": "7.0 - 56.0",
+                "status": "high",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "Total Bilirubin",
+                "value": 6.8,
+                "unit": "mg/dL",
+                "normalRange": "0.2 - 1.2",
+                "status": "high",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "Albumin",
+                "value": 2.2,
+                "unit": "g/dL",
+                "normalRange": "3.4 - 5.4",
+                "status": "low",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "Prothrombin Time (PT) / INR",
+                "value": 2.1,
+                "unit": "INR",
+                "normalRange": "0.9 - 1.1",
+                "status": "high",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "Sodium",
+                "value": 132.0,
+                "unit": "mmol/L",
+                "normalRange": "135.0 - 145.0",
+                "status": "low",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "Potassium",
+                "value": 4.5,
+                "unit": "mmol/L",
+                "normalRange": "3.5-5.0",
+                "status": "normal",
+                "previousValue": null,
+                "date": "2026-01-19"
+            },
+            {
+                "name": "Creatinine",
+                "value": 1.3,
+                "unit": "mg/dL",
+                "normalRange": "0.6 - 1.2",
+                "status": "high",
+                "previousValue": null,
+                "date": "2026-01-19"
+            }
+        ]
+    },
+    {
+        "file": "dashboard_lab_track.json",
+        "data": [
+            {
+                "biomarker": "White Blood Cell Count",
+                "unit": "10^3/uL",
+                "referenceRange": {
+                    "min": 3.4,
+                    "max": 10.8
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 9.8
+                    }
+                ]
+            },
+            {
+                "biomarker": "Hemoglobin",
+                "unit": "g/dL",
+                "referenceRange": {
+                    "min": 13.5,
+                    "max": 17.5
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 10.2
+                    }
+                ]
+            },
+            {
+                "biomarker": "Hemoglobin",
+                "unit": "10^3/uL",
+                "referenceRange": {
+                    "min": 13.5,
+                    "max": 17.5
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 125.0
+                    }
+                ]
+            },
+            {
+                "biomarker": "Platelets",
+                "unit": "10^3/uL",
+                "referenceRange": {
+                    "min": 150.0,
+                    "max": 450.0
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 125.0
+                    }
+                ]
+            },
+            {
+                "biomarker": "AST",
+                "unit": "U/L",
+                "referenceRange": {
+                    "min": 10.0,
+                    "max": 40.0
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 150.0
+                    }
+                ]
+            },
+            {
+                "biomarker": "ALT",
+                "unit": "U/L",
+                "referenceRange": {
+                    "min": 7.0,
+                    "max": 56.0
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 110.0
+                    }
+                ]
+            },
+            {
+                "biomarker": "Total Bilirubin",
+                "unit": "mg/dL",
+                "referenceRange": {
+                    "min": 0.2,
+                    "max": 1.2
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 6.8
+                    }
+                ]
+            },
+            {
+                "biomarker": "Albumin",
+                "unit": "g/dL",
+                "referenceRange": {
+                    "min": 3.4,
+                    "max": 5.4
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 2.2
+                    }
+                ]
+            },
+            {
+                "biomarker": "Prothrombin Time (PT) / INR",
+                "unit": "INR",
+                "referenceRange": {
+                    "min": 0.9,
+                    "max": 1.1
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 2.1
+                    }
+                ]
+            },
+            {
+                "biomarker": "Sodium",
+                "unit": "mmol/L",
+                "referenceRange": {
+                    "min": 135.0,
+                    "max": 145.0
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 132.0
+                    }
+                ]
+            },
+            {
+                "biomarker": "Potassium",
+                "unit": "mmol/L",
+                "referenceRange": {
+                    "min": 3.5,
+                    "max": 5.0
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 4.5
+                    }
+                ]
+            },
+            {
+                "biomarker": "Creatinine",
+                "unit": "mg/dL",
+                "referenceRange": {
+                    "min": 0.6,
+                    "max": 1.2
+                },
+                "values": [
+                    {
+                        "t": "2026-01-19T00:00:00",
+                        "value": 1.3
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "file": "dashboard_medication_track.json",
+        "data": {
+            "encounters": [
+                {
+                    "encounter_no": 1,
+                    "date": "2026-01-19"
+                }
+            ],
+            "medications": [
+                {
+                    "name": "Lactulose",
+                    "startDate": "2026-01-19",
+                    "endDate": null,
+                    "dose": "500 g oral daily",
+                    "indication": "Ascites"
+                },
+                {
+                    "name": "Furosemide",
+                    "startDate": "2026-01-19",
+                    "endDate": null,
+                    "dose": "400 mg oral daily",
+                    "indication": "Ascites"
+                },
+                {
+                    "name": "Propranolol",
+                    "startDate": "2026-01-19",
+                    "endDate": null,
+                    "dose": "300 mg oral daily",
+                    "indication": "Portal Hypertension"
+                }
+            ]
+        }
+    },
+    {
+        "file": "dashboard_pre_diagnosis.json",
+        "data": [
+            {
+                "diagnosis": "Decompensated Alcoholic Liver Cirrhosis",
+                "status": "high",
+                "note": "Patient has a known history of alcoholic liver cirrhosis (Child-Pugh B), presenting with ascites, confusion, jaundice, and elevated LFTs (AST 150, ALT 110, Total Bilirubin 6.8). Imaging confirms liver size reduction, nodular contour, increased echogenicity, and splenomegaly. Recent alcohol relapse and poor medication compliance are contributing factors."
+            },
+            {
+                "diagnosis": "Hepatic Encephalopathy",
+                "status": "high",
+                "note": "Patient presents with confusion, disorientation, and 'fuzzy brain' symptoms, which are classic signs of hepatic encephalopathy. This is strongly supported by the decompensated liver cirrhosis and elevated bilirubin."
+            },
+            {
+                "diagnosis": "Ascites",
+                "status": "high",
+                "note": "Abdominal distension, positive fluid wave, and shifting dullness on examination, along with imaging findings of a large volume of anechoic fluid in the peritoneal cavity, confirm significant ascites. This is a direct consequence of decompensated liver disease."
+            },
+            {
+                "diagnosis": "Alcoholic Hepatitis",
+                "status": "medium",
+                "note": "While the patient has a history of alcohol abuse and elevated LFTs (AST 150, ALT 110), the imaging findings are more indicative of chronic cirrhosis rather than acute inflammation. However, superimposed alcoholic hepatitis is possible given the recent relapse."
+            },
+            {
+                "diagnosis": "Acute Kidney Injury",
+                "status": "medium",
+                "note": "Creatinine is elevated at 1.3 mg/dL, which is a 'high' flag. This could be related to hepatorenal syndrome secondary to decompensated liver disease, or other causes of AKI given the patient's overall unwell state and potential dehydration from poor intake/diarrhea from Lactulose."
+            },
+            {
+                "diagnosis": "Hyponatremia",
+                "status": "medium",
+                "note": "Sodium is low at 132 mmol/L, which is a 'high' flag. This is common in patients with advanced liver disease and ascites due to fluid retention and diuretic use."
+            },
+            {
+                "diagnosis": "Anemia",
+                "status": "medium",
+                "note": "Hemoglobin is low at 10.2 g/dL, and the other hemoglobin value is also flagged as low. This is common in chronic liver disease due to various factors including poor nutrition, GI bleeding, or hypersplenism."
+            },
+            {
+                "diagnosis": "Thrombocytopenia",
+                "status": "medium",
+                "note": "Platelets are low at 125.0 x 10^3/uL, which is a 'high' flag. This is a common complication of liver cirrhosis due to hypersplenism and impaired thrombopoiesis."
+            }
+        ]
+    },
+    {
+        "file": "dashboard_risk_event_track.json",
+        "data": {
+            "risks": [
+                {
+                    "t": "2026-01-19T09:00:00Z",
+                    "riskScore": 8,
+                    "factors": [
+                        "Decompensated Alcoholic Liver Cirrhosis",
+                        "Ascites",
+                        "Hepatic Encephalopathy",
+                        "Alcohol relapse",
+                        "Poor medication compliance",
+                        "Jaundice",
+                        "Confusion",
+                        "Abdominal distension",
+                        "Pitting edema"
+                    ]
+                },
+                {
+                    "t": "2026-01-19T00:00:00Z",
+                    "riskScore": 7,
+                    "factors": [
+                        "Elevated AST/ALT",
+                        "Elevated Total Bilirubin",
+                        "Low Albumin",
+                        "Elevated PT/INR",
+                        "Low Sodium",
+                        "Elevated Creatinine",
+                        "Low Hemoglobin",
+                        "Low Platelets"
+                    ]
+                },
+                {
+                    "t": "2026-01-20T00:00:00Z",
+                    "riskScore": 9,
+                    "factors": [
+                        "Urgent hospital referral",
+                        "Acute decompensation",
+                        "Significant ascites",
+                        "Hepatic encephalopathy",
+                        "Hypotension (100/65 mmHg)",
+                        "Tachycardia (100 bpm)"
+                    ]
+                }
+            ],
+            "events": [
+                {
+                    "event": "Patient Presentation",
+                    "t": "2026-01-19T09:00:00Z",
+                    "note": "Patient presented to GP with return of ascites, confusion, poor medication compliance, and recent alcohol relapse."
+                },
+                {
+                    "event": "Physical Examination Findings",
+                    "t": "2026-01-19T09:00:00Z",
+                    "note": "Unwell appearance, jaundice, distended abdomen, confusion, tachycardia, bilateral pitting edema."
+                },
+                {
+                    "event": "Lab Results Received",
+                    "t": "2026-01-19T00:00:00Z",
+                    "note": "Critical lab values including elevated liver enzymes (AST/ALT), elevated bilirubin, low albumin, elevated INR, low sodium, elevated creatinine, low hemoglobin, and low platelets."
+                },
+                {
+                    "event": "Medication Non-compliance Noted",
+                    "t": "2026-01-19T09:00:00Z",
+                    "note": "Patient admitted to not taking Lactulose regularly and missing doses of Furosemide and Propranolol."
+                },
+                {
+                    "event": "Alcohol Relapse Confirmed",
+                    "t": "2026-01-19T09:00:00Z",
+                    "note": "Patient admitted to consuming 8-10 units of alcohol daily for the past two weeks."
+                },
+                {
+                    "event": "Urgent Hospital Referral",
+                    "t": "2026-01-20T00:00:00Z",
+                    "note": "GP referred patient for urgent assessment and management of decompensated cirrhosis, ascites, and hepatic encephalopathy."
+                },
+                {
+                    "event": "Medication Adjustment (Presumed)",
+                    "t": "2026-01-19T09:00:00Z",
+                    "note": "Lactulose increased to 500g daily, Furosemide to 400mg daily, and Propranolol to 300mg daily."
+                }
+            ]
+        }
+    },
+    {
+        "file": "encounters.json",
+        "data": [
+            {
+                "encounter": {
+                    "encounter_no": 1,
+                    "meta": {
+                        "visit_type": "Urgent Care Visit",
+                        "date_time": "2026-01-19T09:00:00Z",
+                        "provider": {
+                            "name": "Dr. Anya Sharma",
+                            "specialty": "General Practitioner"
+                        },
+                        "ui_risk_color": "red"
+                    },
+                    "assessment": {
+                        "impression": "Decompensated Alcoholic Liver Cirrhosis with Ascites and Hepatic Encephalopathy",
+                        "differential": [
+                            "Alcoholic Hepatitis",
+                            "Decompensated Heart Failure",
+                            "Malignancy"
+                        ]
+                    },
+                    "chief_complaint": "Return of ascites, confusion, and poor medication compliance with recent alcohol relapse.",
+                    "hpi": "Patient presents to his GP feeling significantly unwell, reporting a return of his abdominal distension over the past week, stating his trousers are \"too tight again.\" He also notes increased episodes of confusion and forgetfulness, describing it as \"my brain's gone all fuzzy.\" He admits to relapsing into heavier alcohol consumption over the last two weeks, averaging around 8-10 units per day, and finding it difficult to stop. He reports feeling nauseous and has had a poor appetite. He hasn't been taking his Lactulose regularly because \"it makes me run to the loo too much.\" He has also missed several doses of his Furosemide and Propranolol. He denies any chest pain, shortness of breath, or fever.",
+                    "medications_prior": [
+                        {
+                            "name": "Lactulose",
+                            "route": "oral",
+                            "indication": "Ascites"
+                        },
+                        {
+                            "name": "Furosemide",
+                            "route": "oral",
+                            "indication": "Ascites"
+                        },
+                        {
+                            "name": "Propranolol",
+                            "route": "oral",
+                            "indication": "Portal Hypertension"
+                        }
+                    ],
+                    "physical_exam": {
+                        "general": "Patient appears unwell, with a distended abdomen and a yellow tinge to his skin. Slightly disoriented and speaks slowly.",
+                        "head_neck": "",
+                        "other_systems": "Abdomen: Markedly distended, tense, with positive fluid wave and shifting dullness. Mild diffuse tenderness. Lungs: Clear, diminished breath sounds at bases. Cardiovascular: Tachycardic, regular rhythm. Extremities: Bilateral pitting edema up to mid-shin."
+                    },
+                    "plan": {
+                        "investigations": {
+                            "labs": [],
+                            "imaging": []
+                        },
+                        "management": {
+                            "follow_up": "Urgent hospital referral.",
+                            "instructions": "Continue Lactulose, Furosemide, and Propranolol as prescribed. Monitor for worsening symptoms.",
+                            "medications_started": [
+                                {
+                                    "name": "Lactulose",
+                                    "dose": "500 g",
+                                    "route": "oral",
+                                    "frequency": "daily",
+                                    "indication": "Ascites"
+                                },
+                                {
+                                    "name": "Furosemide",
+                                    "dose": "400 mg",
+                                    "route": "oral",
+                                    "frequency": "daily",
+                                    "indication": "Ascites"
+                                },
+                                {
+                                    "name": "Propranolol",
+                                    "dose": "300 mg",
+                                    "route": "oral",
+                                    "frequency": "daily",
+                                    "indication": "Portal Hypertension"
+                                }
+                            ]
+                        }
+                    },
+                    "reason_for_visit": "Return of ascites, confusion, and poor medication compliance with recent alcohol relapse."
+                },
+                "patient": {
+                    "name": "Arthur Pendelton",
+                    "sex": "Male",
+                    "age_at_first_encounter": 54
+                },
+                "encounterIndex": 0,
+                "dataSource": "ENCOUNTER"
+            }
+        ]
+    },
+    {
+        "file": "patient_context.json",
+        "data": {
+            "description": "Patient presents with decompensated alcoholic liver cirrhosis, ascites, and hepatic encephalopathy, exacerbated by recent alcohol relapse and poor medication compliance.",
+            "patient": {
+                "name": "Arthur Pendelton",
+                "date_of_birth": "1970-03-15",
+                "age": 55,
+                "sex": "Male",
+                "identifiers": {
+                    "mrn": "P0001"
+                }
+            },
+            "riskLevel": "critical",
+            "primaryDiagnosis": "Decompensated Alcoholic Liver Cirrhosis with Ascites and Hepatic Encephalopathy",
+            "problem_list": [
+                {
+                    "name": "Decompensated Alcoholic Liver Cirrhosis",
+                    "status": "active"
+                },
+                {
+                    "name": "Ascites",
+                    "status": "active"
+                },
+                {
+                    "name": "Hepatic Encephalopathy",
+                    "status": "active"
+                },
+                {
+                    "name": "Alcohol Relapse",
+                    "status": "active"
+                },
+                {
+                    "name": "Poor Medication Compliance",
+                    "status": "active"
+                },
+                {
+                    "name": "Jaundice",
+                    "status": "active"
+                },
+                {
+                    "name": "Confusion",
+                    "status": "active"
+                },
+                {
+                    "name": "Nausea",
+                    "status": "active"
+                },
+                {
+                    "name": "Poor Appetite",
+                    "status": "active"
+                },
+                {
+                    "name": "Ankle Swelling",
+                    "status": "active"
+                },
+                {
+                    "name": "Esophageal Varices",
+                    "status": "chronic"
+                },
+                {
+                    "name": "Depression",
+                    "status": "chronic"
+                },
+                {
+                    "name": "Low Hemoglobin",
+                    "status": "active"
+                },
+                {
+                    "name": "Low Platelets",
+                    "status": "active"
+                },
+                {
+                    "name": "Elevated AST",
+                    "status": "active"
+                },
+                {
+                    "name": "Elevated ALT",
+                    "status": "active"
+                },
+                {
+                    "name": "Elevated Total Bilirubin",
+                    "status": "active"
+                },
+                {
+                    "name": "Low Albumin",
+                    "status": "active"
+                },
+                {
+                    "name": "Elevated Prothrombin Time (PT) / INR",
+                    "status": "active"
+                },
+                {
+                    "name": "Low Sodium",
+                    "status": "active"
+                },
+                {
+                    "name": "Elevated Creatinine",
+                    "status": "active"
+                }
+            ],
+            "medication_timeline": [
+                {
+                    "name": "Lactulose",
+                    "dose": "500 grg/rla",
+                    "route": "oral",
+                    "frequency": "as directed",
+                    "start": "2023-10-26",
+                    "end": "Ongoing"
+                },
+                {
+                    "name": "Furosemide",
+                    "dose": "200 grg",
+                    "route": "oral",
+                    "frequency": "daily",
+                    "start": "2023-10-26",
+                    "end": "Ongoing"
+                },
+                {
+                    "name": "Propranolol",
+                    "dose": "100 grg",
+                    "route": "oral",
+                    "frequency": "daily",
+                    "start": "2023-10-26",
+                    "end": "Ongoing"
+                },
+                {
+                    "name": "Sertraline",
+                    "dose": "unknown",
+                    "route": "oral",
+                    "frequency": "unknown",
+                    "start": "unknown",
+                    "end": "Ongoing"
+                },
+                {
+                    "name": "Tylenol PM",
+                    "dose": "unknown",
+                    "route": "oral",
+                    "frequency": "unknown",
+                    "start": "2026-01-07",
+                    "end": "Ongoing"
+                }
+            ],
+            "allergies": []
+        }
+    },
+    {
+        "file": "raw_images.json",
+        "data": [
+            {
+                "id": "raw-encounter-image-1",
+                "imageUrl": "patient_data_P0001_raw_data_encounter_report_0_2026-01-19.png_encounter_report_0_2026-01-19.png"
+            },
+            {
+                "id": "raw-lab-image-1",
+                "imageUrl": "patient_data_P0001_raw_data_lab_report_0_2025-07-19.png_lab_report_0_2025-07-19.png"
+            },
+            {
+                "id": "raw-lab-image-radiology-1",
+                "imageUrl": "patient_data_P0001_raw_data_imaging_report_0_2026-01-19.png_imaging_report_0_2026-01-19.png"
+            }
+        ]
+    },
+    {
+        "file": "referral.json",
+        "data": {
+            "date": "2026-01-20",
+            "visitType": "Referred By",
+            "provider": "Dr. Anya Sharma, MBBS, MRCGP",
+            "studyType": "URGENT REFERRAL",
+            "specialty": "General Practice",
+            "dataSource": "HIGH STREET MEDICAL PRACTICE",
+            "highlights": [
+                "HIGH STREET MEDICAL PRACTICE",
+                "20 Jan 2026",
+                "Dr. Anya Sharma, MBBS, MRCGP",
+                "URGENT REFERRAL",
+                "General Practice"
+            ]
+        }
+    }
+]
