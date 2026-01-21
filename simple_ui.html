@@ -11,30 +11,59 @@
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .message-enter { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Custom scrollbar for chat area */
+        #chatContainer::-webkit-scrollbar { width: 6px; }
+        #chatContainer::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-gray-100 h-screen flex overflow-hidden">
+<body class="bg-slate-50 h-screen flex overflow-hidden">
 
     <!-- SIDEBAR -->
-    <div class="w-64 bg-white border-r border-gray-200 flex flex-col p-4">
-        <div class="flex items-center gap-2 mb-8 text-blue-600">
-            <i class="fa-solid fa-hospital-user text-2xl"></i>
-            <h1 class="text-xl font-bold">MedForce</h1>
+    <div class="w-72 bg-white border-r border-gray-200 flex flex-col p-6 shadow-sm z-20">
+        <div class="flex items-center gap-3 mb-8 text-blue-700">
+            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <i class="fa-solid fa-hospital-user text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">MedForce</h1>
+                <p class="text-xs text-gray-500 uppercase font-semibold">Clinic Simulator</p>
+            </div>
         </div>
 
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Patient ID</label>
+        <!-- NEW: Server Selection -->
+        <div class="mb-6">
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Server Connection</label>
+            <div class="relative">
+                <select id="serverSelect" onchange="updateServer()" 
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition appearance-none bg-white">
+                    <option value="http://localhost:8000">Localhost (Dev)</option>
+                    <option value="https://clinic-sim-pipeline-481780815788.europe-west1.run.app">Deployed (Production)</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                </div>
+            </div>
+            <p id="connectionStatus" class="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-gray-300"></span> Not Connected
+            </p>
+        </div>
+
+        <div class="mb-6">
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Patient Configuration</label>
             <div class="flex gap-2">
-                <input type="text" id="patientId" value="P0001" class="w-full border rounded px-2 py-1 text-sm">
-                <button onclick="loadHistory()" class="bg-blue-100 text-blue-600 px-2 rounded hover:bg-blue-200" title="Reload">
+                <input type="text" id="patientId" value="P0001" 
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Patient ID">
+                <button onclick="loadHistory()" 
+                    class="bg-gray-100 text-gray-600 px-3 rounded-lg hover:bg-gray-200 border border-gray-300 transition" title="Reload History">
                     <i class="fa-solid fa-rotate"></i>
                 </button>
             </div>
         </div>
 
         <div class="mt-auto">
-            <button onclick="resetChat()" class="w-full bg-red-50 text-red-600 py-2 rounded border border-red-200 hover:bg-red-100 text-sm font-medium">
-                <i class="fa-solid fa-trash-can mr-2"></i> Reset Chat
+            <button onclick="resetChat()" 
+                class="w-full bg-red-50 text-red-600 py-3 rounded-xl border border-red-100 hover:bg-red-100 text-sm font-medium transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-trash-can"></i> Reset Simulation
             </button>
         </div>
     </div>
@@ -42,84 +71,119 @@
     <!-- MAIN CHAT AREA -->
     <div class="flex-1 flex flex-col h-full relative">
         <!-- Header -->
-        <div class="bg-white border-b px-6 py-4 shadow-sm z-10">
-            <h2 class="font-semibold text-gray-800">Hepatology Live Chat</h2>
-            <p class="text-xs text-green-600 flex items-center gap-1">
-                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Online - Nurse Linda
-            </p>
+        <div class="bg-white border-b px-8 py-4 shadow-sm z-10 flex justify-between items-center">
+            <div>
+                <h2 class="font-bold text-gray-800 text-lg">Hepatology Live Chat</h2>
+                <div class="flex items-center gap-2">
+                    <span class="relative flex h-2.5 w-2.5">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                    </span>
+                    <p class="text-xs text-gray-500 font-medium">Nurse Linda is Online</p>
+                </div>
+            </div>
+             <div class="text-xs text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded border" id="currentServerDisplay">
+                Connecting...
+            </div>
         </div>
 
         <!-- Chat Container -->
-        <div id="chatContainer" class="flex-1 overflow-y-auto p-6 space-y-4 pb-32">
-            <!-- Messages will be injected here -->
+        <div id="chatContainer" class="flex-1 overflow-y-auto p-8 space-y-6 pb-32 bg-slate-50">
+            <!-- Messages injected via JS -->
         </div>
 
-        <!-- Loading Indicator -->
-        <div id="loadingIndicator" class="hidden absolute bottom-24 left-6 text-sm text-gray-500 italic">
-            Linda is typing...
+        <!-- Loading Bubble -->
+        <div id="loadingIndicator" class="hidden absolute bottom-28 left-8 flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-md border text-sm text-gray-500">
+            <i class="fa-solid fa-circle-notch fa-spin text-blue-500"></i> Linda is typing...
         </div>
 
         <!-- Input Area -->
-        <div class="bg-white border-t p-4 absolute bottom-0 w-full">
-            <div class="flex items-end gap-2 max-w-4xl">
+        <div class="bg-white border-t p-6 absolute bottom-0 w-full z-20">
+            <div class="max-w-4xl mx-auto bg-gray-50 border border-gray-200 rounded-2xl p-2 flex items-end gap-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-100 transition">
+                
                 <!-- File Attachment -->
                 <div class="relative">
                     <input type="file" id="fileInput" class="hidden" onchange="handleFileSelect()">
                     <button onclick="document.getElementById('fileInput').click()" 
-                            class="p-3 text-gray-400 hover:text-blue-600 transition border rounded-lg hover:bg-gray-50">
-                        <i class="fa-solid fa-paperclip"></i>
+                            class="p-3 text-gray-400 hover:text-blue-600 transition rounded-xl hover:bg-white" title="Attach Document">
+                        <i class="fa-solid fa-paperclip text-lg"></i>
                     </button>
-                    <span id="fileBadge" class="hidden absolute -top-2 -right-2 bg-blue-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">1</span>
+                    <!-- File Badge -->
+                    <div id="fileBadge" class="hidden absolute -top-3 -right-2 bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
+                        <span id="fileNameDisplay" class="max-w-[60px] truncate">file</span>
+                        <i class="fa-solid fa-xmark cursor-pointer hover:text-red-200" onclick="clearAttachment(event)"></i>
+                    </div>
                 </div>
 
                 <!-- Text Input -->
                 <textarea id="messageInput" rows="1" 
-                    class="flex-1 border rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                    placeholder="Type your message..." onkeydown="checkEnter(event)"></textarea>
+                    class="flex-1 bg-transparent border-none px-2 py-3 focus:ring-0 text-gray-700 placeholder-gray-400 resize-none max-h-32"
+                    placeholder="Type your message here..." onkeydown="checkEnter(event)"></textarea>
 
                 <!-- Send Button -->
                 <button onclick="sendMessage()" 
-                    class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition shadow-md">
-                    <i class="fa-solid fa-paper-plane"></i>
+                    class="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition shadow-md group">
+                    <i class="fa-solid fa-paper-plane group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform"></i>
                 </button>
             </div>
+            <p class="text-center text-xs text-gray-400 mt-2">AI-powered medical triage simulation.</p>
         </div>
     </div>
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
-        const API_URL = "http://localhost:8000";
-        let currentAttachment = null;
+        // Global API URL Variable
+        let API_URL = "http://localhost:8000";
+        let currentAttachmentObj = null; 
         
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
-            loadHistory();
+            updateServer(); // Set initial server based on dropdown
         });
+
+        // --- SERVER MANAGEMENT ---
+        function updateServer() {
+            const select = document.getElementById('serverSelect');
+            API_URL = select.value;
+            
+            // Update UI indicators
+            document.getElementById('currentServerDisplay').textContent = API_URL.includes('localhost') ? 'LOCAL' : 'CLOUD';
+            
+            // Attempt to ping/load history to verify connection
+            loadHistory();
+        }
+
+        function setConnectionStatus(isConnected) {
+            const el = document.getElementById('connectionStatus');
+            if (isConnected) {
+                el.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> Connected`;
+                el.classList.replace('text-red-500', 'text-gray-400');
+            } else {
+                el.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> Offline`;
+                el.classList.add('text-red-500');
+            }
+        }
 
         // --- CORE FUNCTIONS ---
 
         async function loadHistory() {
             const pid = document.getElementById('patientId').value;
             const container = document.getElementById('chatContainer');
-            container.innerHTML = ''; // Clear current
+            container.innerHTML = ''; 
 
             try {
                 const res = await fetch(`${API_URL}/chat/${pid}`);
                 if (res.ok) {
+                    setConnectionStatus(true);
                     const data = await res.json();
                     if (data.conversation) {
                         data.conversation.forEach(msg => {
-                            // Backend saves 'sender', UI expects 'role' logic
-                            // Also backend saves full objects for admin
                             const role = msg.sender === 'patient' ? 'user' : 'assistant';
                             const content = typeof msg.message === 'string' ? msg.message : (msg.message || "");
-                            
-                            // Check for attachments in history
-                            const attachments = msg.attachments || msg.attachment || [];
+                            const attachments = msg.attachments || (msg.attachment ? msg.attachment : []); 
                             
                             renderMessage(role, content, attachments);
 
-                            // Handle Special Admin Actions stored in history
                             if (role === 'assistant') {
                                 handleAdminAction(msg);
                             }
@@ -127,12 +191,14 @@
                         scrollToBottom();
                     }
                 } else {
-                    renderSystemMessage("Starting new session...");
-                    resetChat(); // Auto-reset if 404
+                    setConnectionStatus(true); // Server reachable, just 404
+                    renderSystemMessage("Starting new session (No history found)...");
+                    // Optionally trigger reset here if you want auto-start
                 }
             } catch (err) {
                 console.error(err);
-                renderSystemMessage("Could not connect to server.");
+                setConnectionStatus(false);
+                renderSystemMessage(`Could not connect to ${API_URL}`);
             }
         }
 
@@ -141,26 +207,29 @@
             const input = document.getElementById('messageInput');
             const text = overrideText || input.value.trim();
 
-            if (!text && !formData) return;
+            if (!text && !formData && !currentAttachmentObj) return;
 
             // Optimistic UI Update
-            if (!overrideText && !formData) { // Don't verify text for form submissions
-                renderMessage("user", text, currentAttachment ? [currentAttachment] : []);
+            if (!overrideText && !formData) { 
+                const displayFiles = currentAttachmentObj ? [currentAttachmentObj.filename] : [];
+                renderMessage("user", text, displayFiles);
                 input.value = '';
+                input.style.height = 'auto';
             }
 
-            // Prepare Payload
+            const attachmentsPayload = currentAttachmentObj ? [{
+                filename: currentAttachmentObj.filename,
+                content_base64: currentAttachmentObj.base64
+            }] : [];
+
             const payload = {
                 patient_id: pid,
-                patient_message: text,
-                patient_attachment: currentAttachment ? [currentAttachment] : [],
-                patient_form: formData || {}
+                patient_message: text || (currentAttachmentObj ? "Sent an attachment." : ""),
+                patient_attachments: attachmentsPayload,
+                patient_form: formData || null
             };
 
-            // Reset Attachment UI
-            currentAttachment = null;
-            document.getElementById('fileBadge').classList.add('hidden');
-
+            clearAttachment();
             setLoading(true);
 
             try {
@@ -173,11 +242,7 @@
                 if (res.ok) {
                     const data = await res.json();
                     const nurseResp = data.nurse_response;
-                    
-                    // Render Admin Text
                     renderMessage("assistant", nurseResp.message);
-                    
-                    // Handle Actions (Forms/Slots)
                     handleAdminAction(nurseResp);
                 } else {
                     renderSystemMessage("Error: Server rejected request");
@@ -192,33 +257,75 @@
 
         async function resetChat() {
             const pid = document.getElementById('patientId').value;
+            if(!confirm("Are you sure you want to reset the simulation?")) return;
+            
             try {
                 await fetch(`${API_URL}/chat/${pid}/reset`, { method: 'POST' });
-                location.reload(); // Simple reload to refresh state
+                location.reload();
             } catch (err) {
                 alert("Failed to reset");
             }
         }
 
-        // --- RENDERING HELPERS ---
+        // --- FILE HANDLING (BASE64) ---
+
+        function handleFileSelect() {
+            const input = document.getElementById('fileInput');
+            if (input.files.length > 0) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    currentAttachmentObj = {
+                        filename: file.name,
+                        base64: e.target.result // This is the Data URL string
+                    };
+                    
+                    document.getElementById('fileBadge').classList.remove('hidden');
+                    document.getElementById('fileNameDisplay').textContent = file.name;
+                    document.getElementById('messageInput').focus();
+                };
+                
+                reader.readAsDataURL(file); 
+            }
+        }
+
+        function clearAttachment(e) {
+            if(e) e.stopPropagation();
+            currentAttachmentObj = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileBadge').classList.add('hidden');
+        }
+
+        // --- RENDERING LOGIC ---
 
         function renderMessage(role, text, attachments = []) {
             const container = document.getElementById('chatContainer');
             const isUser = role === 'user';
             
+            let fileList = Array.isArray(attachments) ? attachments : [];
+            
             let attachHtml = '';
-            if (attachments && attachments.length > 0) {
+            if (fileList.length > 0) {
                 attachHtml = `
-                    <div class="mt-2 p-2 bg-gray-50 rounded border text-xs flex items-center gap-2 text-gray-600">
-                        <i class="fa-solid fa-file"></i> ${attachments.join(", ")}
+                    <div class="mt-3 space-y-1">
+                        ${fileList.map(f => `
+                            <div class="flex items-center gap-2 bg-black/5 p-2 rounded text-xs">
+                                <i class="fa-solid fa-file-image text-gray-500"></i>
+                                <span class="truncate max-w-[150px] font-medium">${typeof f === 'string' ? f : f.filename}</span>
+                            </div>
+                        `).join('')}
                     </div>`;
             }
 
             const html = `
-                <div class="flex ${isUser ? 'justify-end' : 'justify-start'} message-enter">
-                    <div class="max-w-[80%] ${isUser ? 'bg-blue-600 text-white' : 'bg-white border text-gray-800'} rounded-2xl px-5 py-3 shadow-sm">
-                        <div class="whitespace-pre-wrap">${text}</div>
-                        ${attachHtml}
+                <div class="flex ${isUser ? 'justify-end' : 'justify-start'} message-enter group">
+                    <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[85%]">
+                         <span class="text-[10px] text-gray-400 mb-1 px-1">${isUser ? 'You' : 'Nurse Linda'}</span>
+                        <div class="${isUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border text-gray-800 rounded-bl-none'} rounded-2xl px-5 py-3 shadow-sm">
+                            <div class="whitespace-pre-wrap text-sm leading-relaxed">${text}</div>
+                            ${attachHtml}
+                        </div>
                     </div>
                 </div>`;
             
@@ -228,7 +335,7 @@
         function renderSystemMessage(text) {
             const container = document.getElementById('chatContainer');
             container.insertAdjacentHTML('beforeend', `
-                <div class="flex justify-center my-2"><span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">${text}</span></div>
+                <div class="flex justify-center my-2 opacity-75"><span class="text-[10px] bg-gray-200 text-gray-600 px-3 py-1 rounded-full uppercase tracking-wider font-bold">${text}</span></div>
             `);
         }
 
@@ -249,53 +356,38 @@
             if (!formRequest) return;
             const container = document.getElementById('chatContainer');
             
-            // Generate Input Fields safely handling the structure
             const createInput = (label, id, value = "") => `
-                <div class="mb-2">
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">${label}</label>
-                    <input type="text" id="${id}" value="${value || ''}" class="w-full border rounded px-2 py-1 text-sm bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                <div class="space-y-1">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">${label}</label>
+                    <input type="text" id="${id}" value="${value || ''}" class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                 </div>`;
 
-            // Flatten nested data for easier ID generation
             const contact = formRequest.contact || {};
             const addr = contact.address || {};
-            const emerg = contact.emergency || {};
             
             const formHtml = `
-                <div class="flex justify-start message-enter w-full max-w-2xl">
-                    <div class="bg-white border rounded-lg shadow-md p-0 w-full overflow-hidden">
-                        <div class="bg-blue-50 px-4 py-2 border-b flex items-center gap-2">
-                            <i class="fa-solid fa-clipboard-list text-blue-600"></i>
-                            <span class="font-semibold text-blue-800 text-sm">Patient Intake Form</span>
+                <div class="flex justify-start message-enter w-full max-w-xl mt-2">
+                    <div class="bg-white border rounded-xl shadow-sm w-full overflow-hidden">
+                        <div class="bg-blue-50/50 px-5 py-3 border-b flex items-center gap-2">
+                            <div class="bg-blue-100 p-1.5 rounded-md text-blue-600"><i class="fa-solid fa-clipboard-list"></i></div>
+                            <span class="font-bold text-gray-800 text-sm">Patient Intake Form</span>
                         </div>
-                        <div class="p-4 space-y-4">
-                            <!-- Section 1: Personal -->
-                            <div class="grid grid-cols-2 gap-3">
+                        <div class="p-5 space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
                                 ${createInput("Full Name", "f_name", formRequest.name)}
                                 ${createInput("DOB (YYYY-MM-DD)", "f_dob", formRequest.dob)}
-                                ${createInput("Gender", "f_gender", formRequest.gender)}
-                                ${createInput("Occupation", "f_occ", formRequest.occupation)}
                             </div>
-                            
-                            <!-- Section 2: Contact -->
-                            <hr class="border-gray-100">
-                            <h4 class="text-xs font-bold text-gray-400">CONTACT</h4>
-                            <div class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-2 gap-4">
                                 ${createInput("Phone", "c_phone", contact.phone)}
                                 ${createInput("Email", "c_email", contact.email)}
                             </div>
-                            ${createInput("Address", "c_addr", addr.street)}
-                            
-                            <!-- Section 3: Medical -->
-                            <hr class="border-gray-100">
-                            <h4 class="text-xs font-bold text-gray-400">MEDICAL</h4>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Chief Complaint</label>
-                                <textarea id="f_complaint" rows="2" class="w-full border rounded px-2 py-1 text-sm bg-gray-50">${formRequest.complaint || ''}</textarea>
+                            ${createInput("Street Address", "c_addr", addr.street)}
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Chief Complaint</label>
+                                <textarea id="f_complaint" rows="2" class="w-full border border-gray-200 rounded px-2 py-2 text-sm focus:border-blue-500 outline-none resize-none">${formRequest.complaint || ''}</textarea>
                             </div>
-
-                            <button onclick="submitForm()" class="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 transition">
-                                Submit Form
+                            <button onclick="submitForm()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-semibold transition shadow-sm mt-2">
+                                Confirm & Submit Details
                             </button>
                         </div>
                     </div>
@@ -306,29 +398,19 @@
         }
 
         function submitForm() {
-            // Reconstruct JSON Structure
             const formData = {
                 name: document.getElementById('f_name').value,
                 dob: document.getElementById('f_dob').value,
-                gender: document.getElementById('f_gender').value,
-                occupation: document.getElementById('f_occ').value,
                 contact: {
                     phone: document.getElementById('c_phone').value,
                     email: document.getElementById('c_email').value,
-                    address: {
-                        street: document.getElementById('c_addr').value,
-                        // Simplification for demo: assuming city/state are inferred or added to one line
-                        city: "London", state: "UK", zipCode: "" 
-                    },
-                    emergency: { name: "", relation: "", phone: "" } // Mocked for brevity
+                    address: { street: document.getElementById('c_addr').value, city: "London", state: "UK", zipCode: "" },
+                    emergency: { name: "", relation: "", phone: "" }
                 },
                 complaint: document.getElementById('f_complaint').value,
                 medical_history: [],
                 allergies: []
             };
-
-            // Remove Form from UI (Optional, but usually good to make it look 'submitted')
-            // For now we just send the data
             sendMessage("I have completed the intake form.", formData);
         }
 
@@ -340,20 +422,26 @@
             let cardsHtml = '';
             slotsData.slots.forEach(slot => {
                 cardsHtml += `
-                    <div onclick="selectSlot('${slot.date}', '${slot.time}')" 
-                         class="bg-white border rounded p-3 cursor-pointer hover:border-blue-500 hover:shadow-md transition text-center group">
-                        <div class="font-bold text-gray-700 group-hover:text-blue-600">${slot.date}</div>
+                    <button onclick="selectSlot('${slot.date}', '${slot.time}')" 
+                         class="bg-white border rounded-xl p-3 text-left hover:border-blue-500 hover:shadow-md transition group w-full">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-gray-700 group-hover:text-blue-600">${slot.date}</span>
+                            <i class="fa-regular fa-calendar text-gray-400 group-hover:text-blue-500"></i>
+                        </div>
                         <div class="text-sm text-gray-500">${slot.time}</div>
-                        <div class="text-xs bg-gray-100 text-gray-600 rounded mt-1 py-0.5">${slot.type}</div>
-                    </div>
+                        <div class="text-[10px] bg-gray-100 text-gray-500 inline-block px-1.5 py-0.5 rounded mt-2">${slot.type}</div>
+                    </button>
                 `;
             });
 
             const html = `
-                <div class="flex justify-start message-enter w-full">
-                    <div class="bg-gray-50 rounded-xl p-4 w-full max-w-lg border border-gray-200">
-                        <p class="text-sm font-semibold text-gray-600 mb-3">Available Appointments with ${slotsData.doctorName}:</p>
-                        <div class="grid grid-cols-3 gap-2">
+                <div class="flex justify-start message-enter w-full mt-2">
+                    <div class="bg-gray-50 rounded-2xl p-5 w-full max-w-lg border border-gray-200">
+                        <div class="flex items-center gap-2 mb-4">
+                            <i class="fa-solid fa-user-doctor text-blue-600"></i>
+                            <p class="text-sm font-bold text-gray-700">Available with ${slotsData.doctorName}:</p>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                             ${cardsHtml}
                         </div>
                     </div>
@@ -374,17 +462,29 @@
             const sch = appt.schedule;
 
             const html = `
-                <div class="flex justify-start message-enter w-full">
-                    <div class="bg-green-50 border border-green-200 rounded-xl p-4 w-full max-w-md">
-                        <div class="flex items-center gap-2 text-green-700 mb-2">
-                            <i class="fa-solid fa-circle-check text-xl"></i>
-                            <span class="font-bold">Appointment Confirmed</span>
+                <div class="flex justify-start message-enter w-full mt-2">
+                    <div class="bg-green-50/50 border border-green-200 rounded-2xl p-5 w-full max-w-md relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-green-500"></div>
+                        <div class="flex items-center gap-3 text-green-700 mb-4">
+                            <div class="bg-green-100 p-2 rounded-full"><i class="fa-solid fa-check text-lg"></i></div>
+                            <div>
+                                <h4 class="font-bold text-sm">Appointment Confirmed</h4>
+                                <p class="text-xs opacity-75">ID: ${appt.appointmentId}</p>
+                            </div>
                         </div>
-                        <div class="text-sm text-green-800 space-y-1">
-                            <p><strong>ID:</strong> ${appt.appointmentId}</p>
-                            <p><strong>Date:</strong> ${sch.date} at ${sch.time}</p>
-                            <p><strong>Provider:</strong> ${sch.provider}</p>
-                            <p class="text-xs mt-2 opacity-75">${sch.location}</p>
+                        <div class="bg-white/60 rounded-lg p-3 text-sm text-gray-700 space-y-2 border border-green-100">
+                            <div class="flex justify-between border-b border-green-100 pb-2">
+                                <span class="text-gray-500 text-xs uppercase">Date & Time</span>
+                                <span class="font-medium">${sch.date} &bull; ${sch.time}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-green-100 pb-2">
+                                <span class="text-gray-500 text-xs uppercase">Doctor</span>
+                                <span class="font-medium">${sch.provider}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 text-xs uppercase block mb-1">Location</span>
+                                <span class="font-medium text-xs">${sch.location}</span>
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -393,22 +493,13 @@
         }
 
         // --- UTILS ---
-
-        function handleFileSelect() {
-            const input = document.getElementById('fileInput');
-            if (input.files.length > 0) {
-                currentAttachment = input.files[0].name;
-                document.getElementById('fileBadge').classList.remove('hidden');
-                // Simulate focus back to text input
-                document.getElementById('messageInput').focus();
-            }
-        }
-
         function checkEnter(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
+            e.target.style.height = 'auto';
+            e.target.style.height = (e.target.scrollHeight) + 'px';
         }
 
         function setLoading(isLoading) {

@@ -74,8 +74,42 @@ class PatientManager(BaseLogicAgent):
         self.patient_profile = response.text
         with open(f"{self.output_dir}/patient_profile.txt", "w", encoding="utf-8") as f:
             f.write(self.patient_profile)
+
+
+        await self.generate_basic_info(self.patient_profile)
             
         return response.text
+    
+    async def generate_basic_info(self, patient_profile_text):
+        if not patient_profile_text: 
+            patient_profile_text = self.patient_profile
+        
+        with open("system_prompts/basic_info_extractor.md", "r", encoding="utf-8") as f: 
+            system_instruction = f.read()
+        with open("response_schema/basic_info.json", "r", encoding="utf-8") as f:
+            response_schema = json.load(f)
+
+        try:
+            prompt_content = f"PATIENT PROFILE:\n{patient_profile_text}\n{json.dumps(self.args)}\nTASK: Extract the basic demographic and administrative info for this patient."
+
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", 
+                    response_schema=response_schema, 
+                    system_instruction=system_instruction, 
+                    temperature=0.3 # Low temp for factual extraction
+                )
+            )
+            
+            res = json.loads(response.text)
+            self.gcs.create_file_from_string(json.dumps(res), f"{self.bucket_path}/basic_info.json", content_type="application/json")
+            return res
+            
+        except Exception as e:
+            print(f"Error in generate_basic_info: {e}") 
+            return {}
     
     async def generate_system_prompt(self, patient_profile_text):
         if not patient_profile_text: 
@@ -143,6 +177,97 @@ class PatientManager(BaseLogicAgent):
             print(f"Error in generate_encounter_story: {e}") 
             return f"Error: {str(e)}"
 
+    async def generate_referral_letter(self):
+        with open("system_prompts/referral_generator.md", "r", encoding="utf-8") as f: 
+                system_instruction = f.read()
+
+        patient_profile_text = self.gcs.read_file_as_string(f"patient_data/{self.args.get('patient_id')}/patient_profile.txt")
+        encounter_narrative_text = self.gcs.read_file_as_string(f"patient_data/{self.args.get('patient_id')}/encounter_narrative.txt")
+        try:
+            # We explicitly instruct the model to look at the LAST encounter
+            prompt_content = (
+                f"### PATIENT PROFILE ###\n"
+                f"{patient_profile_text}\n\n"
+                f"### ENCOUNTER HISTORY (Chronological) ###\n"
+                f"{encounter_narrative_text}\n\n"
+                f"### TASK ###\n"
+                f"Write a formal Medical Referral Letter based on the **MOST RECENT** encounter in the history above. "
+                f"Address it to the appropriate Specialist (e.g., Hepatologist, Cardiologist) based on the diagnosis. "
+                f"Include the header, date, patient details, clinical summary, and signature. "
+                f"Format it strictly as a physical document text."
+            )
+
+            response = await self.client.aio.models.generate_content(
+                model=MODEL, 
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    response_mime_type="text/plain", 
+                    system_instruction=system_instruction, 
+                    temperature=0.4 # Professional and consistent
+                )
+            )
+
+            referal_letter_text = response.text
+
+            img_op_path = await self.generate_referral_img(referal_letter_text, output_filename=f"{self.output_dir}/referral_letter.png")
+            
+            self.gcs.create_file_from_string(referal_letter_text, f"{self.bucket_path}/raw_data/referral_letter.txt", content_type="text/plain")
+            self.gcs.upload_file(img_op_path, f"{self.bucket_path}/raw_data/referral_letter.png")
+            return response.text
+            
+        except Exception as e:
+            print(f"Error in generate_letter_text: {e}") 
+            return "Error generating letter."
+
+    async def generate_referral_img(self, letter_text, output_filename="referral_letter.png"):
+        """
+        Generates a photo of the printed letter.
+        """
+        if not letter_text:
+            print("Error: No letter text provided.")
+            return None
+
+        # Construct a prompt that describes the physical object
+        prompt = (
+            f"A realistic, high-resolution, top-down close-up photo of a printed Medical Referral Letter. "
+            f"The paper is white, clean, A4 size, folded slightly. "
+            f"It has a formal clinic letterhead at the top. "
+            f"The visible text on the paper corresponds to:\n\n"
+            f"{letter_text}\n\n"
+            f"Ensure the 'Re: Patient Name' and the 'Reason for Referral' are legible. "
+            f"Include a handwritten blue ink signature at the bottom."
+        )
+
+        models_to_try = [IMAGE_MODEL, IMAGE_MODEL2]
+
+        for model_name in models_to_try:
+            try:
+                print(f"Generating image for referral letter using {model_name}...")
+                
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=[prompt],
+                    config=types.GenerateContentConfig(
+                        image_config=types.ImageConfig(
+                            aspect_ratio="9:16", # Letter aspect ratio
+                        ),
+                    )
+                )
+
+                for part in response.parts:
+                    if part.inline_data is not None:
+                        image = part.as_image()
+                        image.save(output_filename)
+                        print(f"Success: Referral Image saved to {output_filename}")
+                        return output_filename
+                    elif part.text is not None:
+                        print(f"Warning: {model_name} returned text: {part.text}")
+
+            except Exception as e:
+                print(f"Error with {model_name}: {e}")
+                continue
+
+        return None
 
     async def generate_encounters(self, patient_profile_text):
 
@@ -503,9 +628,6 @@ class PatientManager(BaseLogicAgent):
         print("Error: All image generation models failed.")
         return None
 
-        
-
-
     async def generate_imaging_report_img(self, imaging_doc_text, output_filename="radiology_report.png"):
 
         if not imaging_doc_text:
@@ -622,7 +744,6 @@ class PatientManager(BaseLogicAgent):
             return {"conversation": []}
         
 
-
     async def generate_ground_truth(self):
         print("Generating Ground Truth Data...")
         print("Generating Patient Profile...")
@@ -654,7 +775,7 @@ class PatientManager(BaseLogicAgent):
             # Save each individual encounter report text file
             self.gcs.create_file_from_string(
                 encounter_doc, 
-                f"{self.bucket_path}/encounter_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
+                f"{self.bucket_path}/raw_data/encounter_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
                 content_type="text/plain"
             )
 
@@ -671,7 +792,7 @@ class PatientManager(BaseLogicAgent):
             # Save each individual lab report text file
             self.gcs.create_file_from_string(
                 lab_doc, 
-                f"{self.bucket_path}/lab_report_{i}_{lab_entry['date_time'].split('T')[0]}.txt", 
+                f"{self.bucket_path}/raw_data/lab_report_{i}_{lab_entry['date_time'].split('T')[0]}.txt", 
                 content_type="text/plain"
             )
 
@@ -687,7 +808,7 @@ class PatientManager(BaseLogicAgent):
                 # Save each individual imaging report text file
                 self.gcs.create_file_from_string(
                     imaging_doc, 
-                    f"{self.bucket_path}/imaging_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
+                    f"{self.bucket_path}/raw_data/imaging_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
                     content_type="text/plain"
                 )
 
@@ -707,7 +828,7 @@ class PatientManager(BaseLogicAgent):
                 with open(img_file, "rb") as f:
                     self.gcs.create_file_from_string(
                         f.read(), 
-                        f"{self.bucket_path}/{enc_doc['file'].replace('.txt','.png')}", 
+                        f"{self.bucket_path}/raw_data/{enc_doc['file'].replace('.txt','.png')}", 
                         content_type="image/png"
                     )
         print("Generating Lab Images...")
@@ -722,7 +843,7 @@ class PatientManager(BaseLogicAgent):
                 with open(img_file, "rb") as f:
                     self.gcs.create_file_from_string(
                         f.read(), 
-                        f"{self.bucket_path}/{lab_doc['file'].replace('.txt','.png')}", 
+                        f"{self.bucket_path}/raw_data/{lab_doc['file'].replace('.txt','.png')}", 
                         content_type="image/png"
                     )
         print("Generating Imaging Report Images...")
@@ -736,7 +857,7 @@ class PatientManager(BaseLogicAgent):
                 with open(img_file, "rb") as f:
                     self.gcs.create_file_from_string(
                         f.read(), 
-                        f"{self.bucket_path}/{img_doc['file'].replace('.txt','.png')}", 
+                        f"{self.bucket_path}/raw_data/{img_doc['file'].replace('.txt','.png')}", 
                         content_type="image/png"
                     )
 
@@ -870,3 +991,109 @@ class PreConsulteAgent(BaseLogicAgent):
                 "message": "I apologize, the system is currently syncing. Please try again.",
                 "action_type": "TEXT_ONLY"
             }
+
+
+
+class RawDataProcessing(BaseLogicAgent):
+    def __init__(self):
+        super().__init__()  
+        self.gcs = bucket_ops.GCSBucketManager(bucket_name="clinic_sim")
+
+    
+    async def get_text_doc(self, image_path: str):
+        with open("system_prompts/image_parser.md", "r", encoding="utf-8") as f: 
+            system_instruction = f.read()
+
+        with open("response_schema/image_parser.json", "r", encoding="utf-8") as f:
+            response_schema = json.load(f)
+
+        prompt_text = "Analyze this image. 1. Classify the document type based on headers and content. 2. Extract all visible text verbatim."
+            
+        image_bytes = self.gcs.read_file_as_bytes(image_path)
+        mime_type = "image/png"
+
+        # Prepare content parts (Text + Image)
+        contents = [
+            prompt_text,
+            types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        ]
+
+        response = await self.client.aio.models.generate_content(
+            model=MODEL, # Ensure this model supports Vision (e.g. gemini-1.5-flash)
+            contents=contents,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json", 
+                response_schema=response_schema, 
+                system_instruction=system_instruction, 
+                temperature=0.1 # Low temp for accurate OCR
+            )
+        )
+        
+        return json.loads(response.text)
+    
+    async def process_raw_data(self, patient_id: str):
+        pre_consult_chat_path = f"patient_data/{patient_id}/pre_consultation_chat.json"
+        content_str = self.gcs.read_file_as_string(pre_consult_chat_path)
+        history_data = json.loads(content_str)
+
+        results = []
+        for c in history_data.get("conversation", []):
+            if c.get("sender") == "patient" and c.get("attachments"):
+                for att in c["attachments"]:
+                    file_path = f"patient_data/{patient_id}/raw_data/{att}"
+                    result = await self.get_text_doc(file_path)
+                    result.update({"source_file": att})
+                    results.append(result)
+                    print(f"Processed {att}: {result}")
+
+        self.gcs.create_file_from_string(
+            json.dumps(results, indent=4),
+            f"patient_data/{patient_id}/parsed_raw_data.json",
+            content_type="application/json"
+        )
+
+
+    async def process_referral_board(self,referal_raw_object):
+
+        referral_text = referal_raw_object.get("content","")
+
+        with open("system_prompts/referral_parser.md", "r", encoding="utf-8") as f:
+            system_instruction = f.read()
+
+        # 2. Load Response Schema
+        with open("response_schema/referral_parser.json", "r", encoding="utf-8") as f:
+            response_schema = json.load(f)
+
+        # 3. Prepare Prompt
+        prompt_text = (
+            "Analyze the following referral letter text. "
+            "Extract the date, visit type, provider, study type, specialty, and data source. "
+            "Populate the 'highlights' array with exact text snippets used to derive these values."
+        )
+
+        # 4. Prepare content parts (Instructions + The Raw Text)
+        contents = [
+            prompt_text,
+            referral_text
+        ]
+
+        # 5. Call Model
+        response = await self.client.aio.models.generate_content(
+            model=MODEL, 
+            contents=contents,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json", 
+                response_schema=response_schema, 
+                system_instruction=system_instruction, 
+                temperature=0.1 # Low temp for factual extraction
+            )
+        )
+
+        
+
+        result_obj = json.loads(response.text)
+        referral_doctor = {
+            "date" : result_obj.get("date",""),
+        }
+        
+        return json.loads(response.text)

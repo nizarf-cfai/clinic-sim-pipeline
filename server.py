@@ -3,11 +3,12 @@ import logging
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import json
-
+import base64 # <--- Import base64
 
 # Import your agent class
+import my_agents
 from my_agents import PreConsulteAgent
 
 # Configure Logging
@@ -32,11 +33,16 @@ chat_agent = PreConsulteAgent()
 
 # --- Pydantic Models ---
 
+class FileAttachment(BaseModel):
+    filename: str
+    content_base64: str  # The file bytes encoded as a Base64 string
+
 class ChatRequest(BaseModel):
     patient_id: str
     patient_message: str
-    patient_attachment: Optional[list] = None  # For future use, e.g., uploading files
-    patient_form: Optional[dict] = None  # For future use, e.g., uploading files
+    # Changed to accept a list of objects containing the data
+    patient_attachments: Optional[List[FileAttachment]] = None 
+    patient_form: Optional[dict] = None
 
 class ChatResponse(BaseModel):
     patient_id: str
@@ -52,32 +58,72 @@ async def root():
 @app.post("/chat", response_model=ChatResponse)
 async def handle_chat(payload: ChatRequest):
     """
-    Receives a message from the patient, processes it via the PreConsulteAgent,
-    updates GCS history, and returns the Nurse/Admin response.
+    Receives JSON payload with Base64 encoded files.
+    Decodes files -> Saves to GCS -> Passes filenames to Agent.
     """
     logger.info(f"Received message from patient: {payload.patient_id}")
-    request_dict = payload.model_dump() 
+
     try:
-        # Call the logic defined in my_agents.py
-        # This function handles reading history, calling Gemini, and saving history
+        # 1. HANDLE FILE UPLOADS (Base64 -> GCS)
+        filenames_for_agent = []
+        
+        if payload.patient_attachments:
+            for att in payload.patient_attachments:
+                try:
+                    # Decode the Base64 string back to bytes
+                    # Handle cases where frontend might send "data:image/png;base64,..." header
+                    if "," in att.content_base64:
+                        header, encoded = att.content_base64.split(",", 1)
+                    else:
+                        encoded = att.content_base64
+
+                    file_bytes = base64.b64decode(encoded)
+
+                    # Save to GCS
+                    file_path = f"patient_data/{payload.patient_id}/raw_data/{att.filename}"
+                    
+                    # We can try to infer content type from filename extension or header
+                    content_type = "application/octet-stream"
+                    if att.filename.lower().endswith(".png"): content_type = "image/png"
+                    elif att.filename.lower().endswith(".jpg"): content_type = "image/jpeg"
+                    elif att.filename.lower().endswith(".pdf"): content_type = "application/pdf"
+
+                    chat_agent.gcs.create_file_from_string(
+                        file_bytes, 
+                        file_path, 
+                        content_type=content_type
+                    )
+                    
+                    # Keep track of just the filename for the agent
+                    filenames_for_agent.append(att.filename)
+                    logger.info(f"Saved file via Base64: {att.filename}")
+
+                except Exception as e:
+                    logger.error(f"Failed to decode file {att.filename}: {e}")
+
+        # 2. PREPARE AGENT INPUT
+        # Convert Pydantic model to dict, but override the attachments with just filenames
+        agent_input = {
+            "patient_message": payload.patient_message,
+            "patient_attachment": filenames_for_agent, # Agent gets ["lab.png"], NOT the bytes
+            "patient_form": payload.patient_form
+        }
+
+        # 3. CALL AGENT
         response_data = await chat_agent.pre_consulte_agent(
-            user_request=request_dict,
+            user_request=agent_input,
             patient_id=payload.patient_id
         )
 
         return ChatResponse(
             patient_id=payload.patient_id,
-            nurse_response=response_data, # This now contains message, action_type, form_request, etc.
+            nurse_response=response_data,
             status="success"
         )
 
     except FileNotFoundError:
-        # This happens if the patient_id folder or pre_consultation_chat.json doesn't exist in GCS
         logger.error(f"Patient data not found for ID: {payload.patient_id}")
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Patient data not found. Please generate ground truth data for ID {payload.patient_id} first."
-        )
+        raise HTTPException(status_code=404, detail="Patient data not found.")
     
     except Exception as e:
         logger.error(f"Error processing chat: {str(e)}")
@@ -107,6 +153,23 @@ async def get_chat_history(patient_id: str):
         logger.error(f"Error fetching chat history for {patient_id}: {str(e)}")
         # Check if it's a specific GCS 'Not Found' error if possible, otherwise generic 404
         raise HTTPException(status_code=404, detail=f"Chat history not found for patient {patient_id}")
+
+@app.get("/patients")
+async def get_patients():
+    """
+    Retrieves a list of all patient IDs.
+    """
+    patient_pool = []
+    try:
+        file_list = chat_agent.gcs.list_files("patient_data")
+        for p in file_list:
+            patient_id = p.replace('/',"")  # Extract patient ID from path
+            basic_data = json.loads(chat_agent.gcs.read_file_as_string(f"patient_data/{patient_id}/basic_info.json"))
+            patient_pool.append(basic_data)
+        return patient_pool
+    except Exception as e:
+        logger.error(f"Error fetching patient list: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve patient list")
 
 @app.post("/chat/{patient_id}/reset")
 async def reset_chat_history(patient_id: str):
@@ -148,6 +211,41 @@ async def reset_chat_history(patient_id: str):
     except Exception as e:
         logger.error(f"Error resetting chat for {patient_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to reset chat: {str(e)}")
+
+
+@app.get("/process/{patient_id}/preconsult")
+async def process_pre_consult(patient_id: str):
+    """
+    Resets the chat history for a specific patient to the default initial greeting.
+    """
+    try:
+        data_process = my_agents.RawDataProcessing()
+        await data_process.process_raw_data(patient_id)
+        
+        return {
+            "status": "success", 
+            "message": "Chat history has been reset."
+            }
+
+    except Exception as e:
+        logger.error(f"Error processing patient for {patient_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process patient: {str(e)}")
+
+@app.get("/image/{patient_id}/{file_path}")
+async def get_image(patient_id:str, file_path: str):
+
+    try:
+        byte_data = chat_agent.gcs.read_file_as_bytes(f"patient_data/{patient_id}/raw_data/{file_path}")
+        
+        return {
+            "file": file_path, 
+            "data": byte_data
+            }
+
+    except Exception as e:
+        logger.error(f"Error getting image for {patient_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get image: {str(e)}")
+
 
 # --- Run Block ---
 if __name__ == "__main__":
