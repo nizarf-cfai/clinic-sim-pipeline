@@ -1125,6 +1125,7 @@ class RawDataProcessing(BaseLogicAgent):
                     "rawText" : raw_objects.get("rawText",""),
                     "dataSource" : raw_objects.get("dataSource",""),
                     "highlights" : raw_objects.get("highlights",[]),
+                    "componentType"  : "RawClinicalNote"
                 }
                 board_objects.append(rec)
                 rec2 = {
@@ -1135,60 +1136,76 @@ class RawDataProcessing(BaseLogicAgent):
                     "specialty" : raw_objects.get("specialty",""),
                     "imageUrl" : raw_objects.get("imageUrl",""),
                     "dataSource" : raw_objects.get("dataSource",""),
+                    "componentType"  : "RadiologyImage"
                 }
-                board_objects.append(rec)
+                board_objects.append(rec2)
             elif "raw_images.json" in file:
+                for r in raw_objects:
+                    r['componentType'] = "RadiologyImage"
                 board_objects += raw_objects
             elif "encounters.json" in file:
                 for i, e in enumerate(raw_objects):
                     e['id'] = f"single-encounter-{i+1}"
+                    e['componentType'] = "SingleEncounterDocument"
                     board_objects.append(e)
             elif "patient_context.json" in file:
                 raw_objects['id'] = "dashboard-item-patient-context"
+                raw_objects['componentType'] = "PatientContext"
                 board_objects.append(raw_objects)
 
-                raw_objects['id'] = "sidebar-1"
+                raw_objects['id'] = "sidebar-1"     
+                raw_objects['componentType'] = "Sidebar"
+
                 board_objects.append(raw_objects)
             elif "dashboard_analysis.json" in file:
                 raw_objects['id'] = "adverse-event-analytics"
+                raw_objects['componentType'] = "AdverseEventAnalytics"
                 board_objects.append(raw_objects)
             elif "dashboard_lab_latest.json" in file:
                 board_objects.append({
                     "id": "dashboard-item-lab-table",
+                    "componentType": "LabTable",
                     "labResults" : raw_objects
                 })
             elif "dashboard_lab_chart.json" in file:
                 board_objects.append({
                     "id": "dashboard-item-lab-chart",
+                    "componentType": "LabChart",
                     "chartData" : raw_objects
                 })
             elif "dashboard_pre_diagnosis.json" in file:
                 board_objects.append({
                     "id": "differential-diagnosis",
+                    "componentType": "DifferentialDiagnosis",
                     "differential" : raw_objects
                 })
             elif "dashboard_encounters_track.json" in file:
                 board_objects.append({
                     "id": "encounter-track-1",
+                    "componentType": "EncounterTrack",
                     "encounters" : raw_objects
                 })
             elif "dashboard_medication_track.json" in file:
                 board_objects.append({
                     "id": "medication-track-1",
+                    "componentType": "MedicationTrack",
                     "data" : raw_objects
                 })
             elif "dashboard_lab_track.json" in file:
                 board_objects.append({
                     "id": "lab-track-1",
+                    "componentType": "LabTrack",
                     "data" : raw_objects
                 })
             elif "dashboard_risk_event_track.json" in file:
                 board_objects.append({
                     "id": "risk-track-1",
+                    "componentType": "RiskTrack",
                     "risks" : raw_objects.get("risks")
                 })
                 board_objects.append({
                     "id": "key-events-track-1",
+                    "componentType": "KeyEventsTrack",
                     "events" : raw_objects.get("events")
                 })
             

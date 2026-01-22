@@ -12,7 +12,7 @@ import my_agents
 from my_agents import PreConsulteAgent
 import schedule_manager
 import bucket_ops
-
+import traceback
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("medforce-server")
@@ -189,13 +189,17 @@ async def get_patients():
     try:
         file_list = chat_agent.gcs.list_files("patient_data")
         for p in file_list:
-            patient_id = p.replace('/',"")  # Extract patient ID from path
-            basic_data = json.loads(chat_agent.gcs.read_file_as_string(f"patient_data/{patient_id}/basic_info.json"))
-            patient_pool.append(basic_data)
+            try:
+                patient_id = p.replace('/',"")  # Extract patient ID from path
+                basic_data = json.loads(chat_agent.gcs.read_file_as_string(f"patient_data/{patient_id}/basic_info.json"))
+                patient_pool.append(basic_data)
+            except Exception as e:
+                print(f"Error reading basic info for {p}: {e}")
         return patient_pool
     except Exception as e:
+        traceback.print_exc()
         logger.error(f"Error fetching patient list: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve patient list")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve patient list : {e}")
 
 @app.post("/chat/{patient_id}/reset")
 async def reset_chat_history(patient_id: str):
