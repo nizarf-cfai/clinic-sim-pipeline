@@ -5,11 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import json
-import base64 # <--- Import base64
-
+import base64 
+import pandas as pd
 # Import your agent class
 import my_agents
 from my_agents import PreConsulteAgent
+import schedule_manager
+import bucket_ops
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +33,31 @@ app.add_middleware(
 # We instantiate it once so we don't reconnect to GCS/VertexAI on every request
 chat_agent = PreConsulteAgent()
 
+gcs = bucket_ops.GCSBucketManager(bucket_name="clinic_sim")
+
+
 # --- Pydantic Models ---
+class ScheduleRequestBase(BaseModel):
+    clinician_id: str  # e.g., N0001
+    date: str          # e.g., 2026-01-22
+    time: str          # e.g., 8:00
+
+class ScheduleBase(BaseModel):
+    clinician_id: str  # e.g., N0001
+
+class ScheduleBasePatient(BaseModel):
+    patient: str  # e.g., P0001
+    date: str          # e.g., 2026-01-22
+    time: str          # e.g., 8:00
+
+class SwitchSchedule(ScheduleBase):
+    item1: Optional[ScheduleBasePatient] = None
+    item2: Optional[ScheduleBasePatient] = None
+
+
+class UpdateSlotRequest(ScheduleRequestBase):
+    patient: Optional[str] = None
+    status: Optional[str] = None
 
 class FileAttachment(BaseModel):
     filename: str
@@ -298,6 +324,149 @@ async def get_image(patient_id:str, file_path: str):
         logger.error(f"Error getting image for {patient_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get image: {str(e)}")
 
+@app.get("/schedule/{clinician_id}")
+async def get_schedule(clinician_id: str):
+
+    try:
+        if clinician_id.startswith("N"):
+            doc_file = "nurse_schedule.csv"
+        elif clinician_id.startswith("D"):
+            doc_file = "doctor_schedule.csv"
+
+
+
+        schedule_ops = schedule_manager.ScheduleCSVManager(gcs_manager=gcs, csv_blob_path=f"clinic_data/{doc_file}")
+        return schedule_ops.get_all()
+
+    except Exception as e:
+        logger.error(f"Error getting schedule for {clinician_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get schedule: {str(e)}")        
+
+
+
+@app.post("/schedule/update")
+async def update_schedule_details(request: UpdateSlotRequest):
+    """
+    General update: Mark as 'done', 'break', 'cancelled', or correct a patient ID.
+    Only updates fields that are provided (not None).
+    """
+    try:
+        # 1. Determine File
+        if request.clinician_id.startswith("N"):
+            doc_file = "nurse_schedule.csv"
+        elif request.clinician_id.startswith("D"):
+            doc_file = "doctor_schedule.csv"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid Clinician ID prefix")
+
+        # 2. Initialize Manager
+        schedule_ops = schedule_manager.ScheduleCSVManager(
+            gcs_manager=gcs, 
+            csv_blob_path=f"clinic_data/{doc_file}"
+        )
+
+        # 3. Dynamic Update Dict
+        # Only add fields to the update dict if they are sent in the request
+        updates = {}
+        if request.patient is not None:
+            updates["patient"] = request.patient
+        if request.status is not None:
+            updates["status"] = request.status
+
+        if not updates:
+            return {"message": "No changes requested."}
+
+        # 4. Perform Update
+        success = schedule_ops.update_slot(
+            nurse_id=request.clinician_id,
+            date=request.date,
+            time=request.time,
+            updates=updates
+        )
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Slot not found.")
+
+        return {"message": "Schedule updated successfully."}
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error updating schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/schedule/switch")
+async def update_schedule_details(request: SwitchSchedule):
+    """
+    General update: Mark as 'done', 'break', 'cancelled', or correct a patient ID.
+    Only updates fields that are provided (not None).
+    """
+    try:
+        # 1. Determine File
+        if request.clinician_id.startswith("N"):
+            doc_file = "nurse_schedule.csv"
+        elif request.clinician_id.startswith("D"):
+            doc_file = "doctor_schedule.csv"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid Clinician ID prefix")
+
+        # 2. Initialize Manager
+        schedule_ops = schedule_manager.ScheduleCSVManager(
+            gcs_manager=gcs, 
+            csv_blob_path=f"clinic_data/{doc_file}"
+        )
+
+        # 3. Dynamic Update Dict
+        # Only add fields to the update dict if they are sent in the request
+        updates = {}
+        if request.item1.patient is not None:
+            updates["patient"] = request.item1.patient
+        if request.item1.date is not None:
+            updates["date"] = request.item1.date
+        if request.item1.time is not None:
+            updates["time"] = request.item1.time
+
+        if not updates:
+            return {"message": "No changes requested."}
+
+        # 4. Perform Update
+        success = schedule_ops.update_slot(
+            nurse_id=request.clinician_id,
+            date=request.item1.date,
+            time=request.item1.time,
+            updates=updates
+        )
+
+        updates = {}
+        if request.item2.patient is not None:
+            updates["patient"] = request.item2.patient
+        if request.item2.date is not None:
+            updates["date"] = request.item2.date
+        if request.item2.time is not None:
+            updates["time"] = request.item2.time
+
+        if not updates:
+            return {"message": "No changes requested."}
+
+        # 4. Perform Update
+        success = schedule_ops.update_slot(
+            nurse_id=request.clinician_id,
+            date=request.item2.date,
+            time=request.item2.time,
+            updates=updates
+        )
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Slot not found.")
+
+        return {"message": "Schedule updated successfully."}
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error updating schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- Run Block ---
 if __name__ == "__main__":
