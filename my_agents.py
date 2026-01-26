@@ -18,6 +18,7 @@ logger = logging.getLogger("medforce-backend")
 
 
 MODEL = "gemini-2.5-flash-lite"
+MODEL_PRE_CONSULT = "gemini-3-flash-preview"
 IMAGE_MODEL = "gemini-3-pro-image-preview"
 IMAGE_MODEL2 = "gemini-2.5-flash-image"
 
@@ -872,6 +873,134 @@ class PatientManager(BaseLogicAgent):
         }
         self.gcs.create_file_from_string(json.dumps(res, indent=4), f"patient_data/{self.args.get('patient_id')}/pre_consultation_chat.json", content_type="application/json")
 
+    async def generate_ground_truth_patient(self):
+        print("Generating Ground Truth Data...")
+        print("Generating Patient Profile...")
+        patient_profile = await self.generate_patient_profile()
+        self.gcs.create_file_from_string(patient_profile, f"{self.bucket_path}/patient_profile.txt", content_type="text/plain")
+
+        print("Generating System Prompt...")
+        patient_system_prompt = await self.generate_system_prompt(patient_profile)
+        self.gcs.create_file_from_string(patient_system_prompt, f"{self.bucket_path}/system_prompt.txt", content_type="text/plain")
+
+        print("Generating Encounters...")
+        encounters = await self.generate_encounters(patient_profile)
+        self.gcs.create_file_from_string(json.dumps(encounters, indent=4), f"{self.bucket_path}/encounters.json", content_type="application/json")
+
+        print("Generating Labs...")
+        labs = await self.generate_labs(patient_profile, encounters)
+        self.gcs.create_file_from_string(json.dumps(labs, indent=4), f"{self.bucket_path}/labs.json", content_type="application/json")
+
+        grouped_labs = self.group_labs_by_date(labs)
+
+        encounter_docs = []
+        for i, encounter in enumerate(encounters):
+            encounter_doc = await self.encounter_doc_parser(encounter)
+            encounter_docs.append({
+                "file" : f"encounter_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt",
+                "date_time": encounter['encounter']['meta']['date_time'],
+                "encounter_report_text": encounter_doc
+            })
+            # Save each individual encounter report text file
+            self.gcs.create_file_from_string(
+                encounter_doc, 
+                f"{self.bucket_path}/raw_data_generated/encounter_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
+                content_type="text/plain"
+            )
+
+
+        lab_docs = []
+        for i, lab_entry in enumerate(grouped_labs):
+            lab_doc = await self.lab_doc_parser(lab_entry, encounters[0].get("patient",{}).get("name"))
+            lab_docs.append({
+                "file" : f"lab_report_{i}_{lab_entry['date_time'].split('T')[0]}.txt",
+                "image_file" : f"lab_report_{i}_{lab_entry['date_time'].split('T')[0]}.txt",
+                "date_time": lab_entry["date_time"],
+                "lab_report_text": lab_doc
+            })
+            # Save each individual lab report text file
+            self.gcs.create_file_from_string(
+                lab_doc, 
+                f"{self.bucket_path}/raw_data_generated/lab_report_{i}_{lab_entry['date_time'].split('T')[0]}.txt", 
+                content_type="text/plain"
+            )
+
+        imaging_docs = []
+        for i, encounter in enumerate(encounters):
+            if encounter.get("encounter",{}).get("plan",{}).get("investigations",{}).get("imaging"):
+                imaging_doc = await self.imaging_doc_parser(encounter)
+                imaging_docs.append({
+                    "file" : f"imaging_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt",
+                    "date_time": encounter['encounter']['meta']['date_time'],
+                    "imaging_report_text": imaging_doc
+                })
+                # Save each individual imaging report text file
+                self.gcs.create_file_from_string(
+                    imaging_doc, 
+                    f"{self.bucket_path}/raw_data_generated/imaging_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
+                    content_type="text/plain"
+                )
+
+        raw_data = {
+            "encounter_reports": encounter_docs,
+            "lab_reports": lab_docs,
+            "imaging_reports": imaging_docs
+        }
+        self.gcs.create_file_from_string(json.dumps(raw_data, indent=4), f"{self.bucket_path}/raw_data.json", content_type="application/json")
+
+        ### GENERATE IMAGES
+        print("Generating Encounter Images...")
+        for enc_doc in encounter_docs:
+            img_file = await self.generate_encounter_img(enc_doc["encounter_report_text"], output_filename=f"{self.output_dir}/{enc_doc['file'].replace('.txt','.png')}")
+            if img_file:
+                # Upload to GCS
+                with open(img_file, "rb") as f:
+                    self.gcs.create_file_from_string(
+                        f.read(), 
+                        f"{self.bucket_path}/raw_data_generated/{enc_doc['file'].replace('.txt','.png')}", 
+                        content_type="image/png"
+                    )
+        print("Generating Lab Images...")
+        for lab_doc in lab_docs:
+            img_file = await self.generate_lab_img(
+                lab_entry, 
+                encounters[0].get("patient",{}).get("name"), 
+                output_filename=f"{self.output_dir}/{lab_doc['file'].replace('.txt','.png')}"
+            )
+            if img_file:
+                # Upload to GCS
+                with open(img_file, "rb") as f:
+                    self.gcs.create_file_from_string(
+                        f.read(), 
+                        f"{self.bucket_path}/raw_data_generated/{lab_doc['file'].replace('.txt','.png')}", 
+                        content_type="image/png"
+                    )
+        print("Generating Imaging Report Images...")
+        for img_doc in imaging_docs:
+            img_file = await self.generate_imaging_report_img(
+                img_doc["imaging_report_text"], 
+                output_filename=f"{self.output_dir}/{img_doc['file'].replace('.txt','.png')}"
+            )
+            if img_file:
+                # Upload to GCS
+                with open(img_file, "rb") as f:
+                    self.gcs.create_file_from_string(
+                        f.read(), 
+                        f"{self.bucket_path}/raw_data_generated/{img_doc['file'].replace('.txt','.png')}", 
+                        content_type="image/png"
+                    )
+
+        print()
+        res = {
+            "conversation" : [
+                    {
+                    'sender': 'admin',
+                    'message': 'Hello, this is Linda the Hepatology Clinic admin desk. How can I help you today?'
+                    }
+            ]
+        }
+        self.gcs.create_file_from_string(json.dumps(res, indent=4), f"patient_data/{self.args.get('patient_id')}/pre_consultation_chat.json", content_type="application/json")
+
 
 class PreConsulteAgent(BaseLogicAgent):
     def __init__(self):
@@ -941,7 +1070,7 @@ class PreConsulteAgent(BaseLogicAgent):
         try:
             # 5. Call LLM with JSON Schema
             response = await self.client.aio.models.generate_content(
-                model=MODEL, 
+                model=MODEL_PRE_CONSULT, 
                 contents=prompt_content,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json", 
@@ -1125,7 +1254,8 @@ class RawDataProcessing(BaseLogicAgent):
                     "rawText" : raw_objects.get("rawText",""),
                     "dataSource" : raw_objects.get("dataSource",""),
                     "highlights" : raw_objects.get("highlights",[]),
-                    "componentType"  : "RawClinicalNote"
+                    "componentType"  : "RawClinicalNote",
+                    "zone" : "referral-zone"
                 }
                 board_objects.append(rec)
                 rec2 = {
@@ -1136,21 +1266,25 @@ class RawDataProcessing(BaseLogicAgent):
                     "specialty" : raw_objects.get("specialty",""),
                     "imageUrl" : raw_objects.get("imageUrl",""),
                     "dataSource" : raw_objects.get("dataSource",""),
-                    "componentType"  : "RadiologyImage"
+                    "componentType"  : "RadiologyImage",
+                    "zone" : "referral-zone"
                 }
                 board_objects.append(rec2)
             elif "raw_images.json" in file:
                 for r in raw_objects:
                     r['componentType'] = "RadiologyImage"
+                    r['zone'] = "raw-ehr-data-zone"
                 board_objects += raw_objects
             elif "encounters.json" in file:
                 for i, e in enumerate(raw_objects):
                     e['id'] = f"single-encounter-{i+1}"
                     e['componentType'] = "SingleEncounterDocument"
+                    e['zone'] = "data-zone"
                     board_objects.append(e)
             elif "patient_context.json" in file:
                 raw_objects['id'] = "dashboard-item-patient-context"
                 raw_objects['componentType'] = "PatientContext"
+                raw_objects['zone'] = "adv-event-zone"
                 board_objects.append(raw_objects)
 
                 raw_objects['id'] = "sidebar-1"     
@@ -1160,52 +1294,62 @@ class RawDataProcessing(BaseLogicAgent):
             elif "dashboard_analysis.json" in file:
                 raw_objects['id'] = "adverse-event-analytics"
                 raw_objects['componentType'] = "AdverseEventAnalytics"
+                raw_objects['zone'] = "adv-event-zone"
+                
                 board_objects.append(raw_objects)
             elif "dashboard_lab_latest.json" in file:
                 board_objects.append({
                     "id": "dashboard-item-lab-table",
                     "componentType": "LabTable",
+                    "zone" : "adv-event-zone",
                     "labResults" : raw_objects
                 })
             elif "dashboard_lab_chart.json" in file:
                 board_objects.append({
                     "id": "dashboard-item-lab-chart",
                     "componentType": "LabChart",
+                    "zone" : "adv-event-zone",
                     "chartData" : raw_objects
                 })
             elif "dashboard_pre_diagnosis.json" in file:
                 board_objects.append({
                     "id": "differential-diagnosis",
                     "componentType": "DifferentialDiagnosis",
+                    "zone" : "adv-event-zone",
                     "differential" : raw_objects
                 })
             elif "dashboard_encounters_track.json" in file:
                 board_objects.append({
                     "id": "encounter-track-1",
                     "componentType": "EncounterTrack",
+                    "zone" : "adv-event-zone",
                     "encounters" : raw_objects
                 })
             elif "dashboard_medication_track.json" in file:
                 board_objects.append({
                     "id": "medication-track-1",
                     "componentType": "MedicationTrack",
+                    "zone" : "adv-event-zone",
                     "data" : raw_objects
                 })
             elif "dashboard_lab_track.json" in file:
                 board_objects.append({
                     "id": "lab-track-1",
                     "componentType": "LabTrack",
+                    "zone" : "adv-event-zone",
                     "data" : raw_objects
                 })
             elif "dashboard_risk_event_track.json" in file:
                 board_objects.append({
                     "id": "risk-track-1",
                     "componentType": "RiskTrack",
+                    "zone" : "adv-event-zone",
                     "risks" : raw_objects.get("risks")
                 })
                 board_objects.append({
                     "id": "key-events-track-1",
                     "componentType": "KeyEventsTrack",
+                    "zone" : "adv-event-zone",
                     "events" : raw_objects.get("events")
                 })
             
