@@ -67,7 +67,7 @@ class RegistrationResponse(BaseModel):
     status: str
 
 class SlotResponse(BaseModel):
-    available_slots: List[str]
+    available_slots: List[dict]
 
 class ScheduleRequestBase(BaseModel):
     clinician_id: str  # e.g., N0001
@@ -547,7 +547,9 @@ async def get_available_slots(doctor_type: Optional[str] = "General"):
     # SIMULATION: logic to get dates relative to 'today'
 
     schedule_ops = schedule_manager.ScheduleCSVManager(gcs_manager=gcs, csv_blob_path=f"clinic_data/doctor_schedule.csv")
-    return schedule_ops.get_empty_schedule()
+    slots = schedule_ops.get_empty_schedule()
+
+    return {"available_slots": slots}
 
 # --- Run Block ---
 if __name__ == "__main__":
