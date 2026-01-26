@@ -62,7 +62,7 @@ class ScheduleCSVManager:
     def get_empty_schedule(self):
         """Returns the entire schedule."""
         df = self._load_df()
-        df = [df['patient_id'] == ""]
+        df = df[df['patient'] == ""]
         return df.to_dict(orient='records')
 
     def get_schedule_by_nurse_and_date(self, nurse_id, date_str):
