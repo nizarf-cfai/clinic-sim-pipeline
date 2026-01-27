@@ -161,3 +161,49 @@ class ScheduleCSVManager:
         df = df[~mask]
         print(f"🗑️ Deleted slot {time}")
         return self._save_df(df)
+
+    def switch_appointments(self, nurse_id, date1, time1, date2, time2):
+        """
+        Swaps the Patient and Status between two time slots.
+        Handles cases where one slot is empty.
+        """
+        df = self._load_df()
+        nurse_id = str(nurse_id)
+        
+        if df.empty: return False
+
+        # 1. Identify the two rows (Indices)
+        mask1 = (df['id'] == nurse_id) & (df['date'] == date1) & (df['time'] == time1)
+        mask2 = (df['id'] == nurse_id) & (df['date'] == date2) & (df['time'] == time2)
+
+        # Check if both slots exist in the schedule structure
+        if not df[mask1].any().any():
+            print(f"❌ Source slot not found: {date1} {time1}")
+            return False
+        if not df[mask2].any().any():
+            print(f"❌ Target slot not found: {date2} {time2}")
+            return False
+
+        # Get the DataFrame indices for these rows
+        idx1 = df[mask1].index[0]
+        idx2 = df[mask2].index[0]
+
+        # 2. Extract values from Slot 1
+        patient1 = df.at[idx1, 'patient']
+        status1  = df.at[idx1, 'status']
+
+        # 3. Extract values from Slot 2
+        patient2 = df.at[idx2, 'patient']
+        status2  = df.at[idx2, 'status']
+
+        # 4. Perform the Swap
+        # Put Slot 2's info into Slot 1
+        df.at[idx1, 'patient'] = patient2
+        df.at[idx1, 'status']  = status2
+
+        # Put Slot 1's info into Slot 2
+        df.at[idx2, 'patient'] = patient1
+        df.at[idx2, 'status']  = status1
+
+        print(f"✅ Swapped: {time1} ({patient1 or 'Empty'}) <-> {time2} ({patient2 or 'Empty'})")
+        return self._save_df(df)

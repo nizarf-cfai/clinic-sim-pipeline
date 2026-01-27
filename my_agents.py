@@ -891,6 +891,7 @@ class PatientManager(BaseLogicAgent):
         labs = await self.generate_labs(patient_profile, encounters)
         self.gcs.create_file_from_string(json.dumps(labs, indent=4), f"{self.bucket_path}/labs.json", content_type="application/json")
 
+        self.generate_referral_letter()
         grouped_labs = self.group_labs_by_date(labs)
 
         encounter_docs = []
@@ -904,7 +905,7 @@ class PatientManager(BaseLogicAgent):
             # Save each individual encounter report text file
             self.gcs.create_file_from_string(
                 encounter_doc, 
-                f"{self.bucket_path}/raw_data_generated/encounter_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
+                f"{self.bucket_path}/raw_data/encounter_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
                 content_type="text/plain"
             )
 
@@ -921,7 +922,7 @@ class PatientManager(BaseLogicAgent):
             # Save each individual lab report text file
             self.gcs.create_file_from_string(
                 lab_doc, 
-                f"{self.bucket_path}/raw_data_generated/lab_report_{i}_{lab_entry['date_time'].split('T')[0]}.txt", 
+                f"{self.bucket_path}/raw_data/lab_report_{i}_{lab_entry['date_time'].split('T')[0]}.txt", 
                 content_type="text/plain"
             )
 
@@ -937,7 +938,7 @@ class PatientManager(BaseLogicAgent):
                 # Save each individual imaging report text file
                 self.gcs.create_file_from_string(
                     imaging_doc, 
-                    f"{self.bucket_path}/raw_data_generated/imaging_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
+                    f"{self.bucket_path}/raw_data/imaging_report_{i}_{encounter['encounter']['meta']['date_time'].split('T')[0]}.txt", 
                     content_type="text/plain"
                 )
 
@@ -957,7 +958,7 @@ class PatientManager(BaseLogicAgent):
                 with open(img_file, "rb") as f:
                     self.gcs.create_file_from_string(
                         f.read(), 
-                        f"{self.bucket_path}/raw_data_generated/{enc_doc['file'].replace('.txt','.png')}", 
+                        f"{self.bucket_path}/raw_data/{enc_doc['file'].replace('.txt','.png')}", 
                         content_type="image/png"
                     )
         print("Generating Lab Images...")
@@ -972,7 +973,7 @@ class PatientManager(BaseLogicAgent):
                 with open(img_file, "rb") as f:
                     self.gcs.create_file_from_string(
                         f.read(), 
-                        f"{self.bucket_path}/raw_data_generated/{lab_doc['file'].replace('.txt','.png')}", 
+                        f"{self.bucket_path}/raw_data/{lab_doc['file'].replace('.txt','.png')}", 
                         content_type="image/png"
                     )
         print("Generating Imaging Report Images...")
@@ -986,7 +987,7 @@ class PatientManager(BaseLogicAgent):
                 with open(img_file, "rb") as f:
                     self.gcs.create_file_from_string(
                         f.read(), 
-                        f"{self.bucket_path}/raw_data_generated/{img_doc['file'].replace('.txt','.png')}", 
+                        f"{self.bucket_path}/raw_data/{img_doc['file'].replace('.txt','.png')}", 
                         content_type="image/png"
                     )
 
@@ -1165,16 +1166,17 @@ class RawDataProcessing(BaseLogicAgent):
         # content_str = self.gcs.read_file_as_string(pre_consult_chat_path)
         # history_data = json.loads(content_str)
 
-        file_list = self.gcs.list_files("patient_data/P0001/raw_data/")
+        file_list = self.gcs.list_files(f"patient_data/{patient_id}/raw_data/")
 
         results = []
         
         for att in file_list:
             file_path = f"patient_data/{patient_id}/raw_data/{att}"
-            result = await self.get_text_doc(file_path)
-            result.update({"source_file": att})
-            results.append(result)
-            print(f"Processed {att}: {result}")
+            if ".png" in att:
+                result = await self.get_text_doc(file_path)
+                result.update({"source_file": att})
+                results.append(result)
+                print(f"Processed {att}: {result}")
 
         self.gcs.create_file_from_string(
             json.dumps(results, indent=4),

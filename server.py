@@ -14,7 +14,7 @@ import schedule_manager
 import bucket_ops
 import traceback
 import uuid
-
+from fastapi import Response
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("medforce-server")
@@ -107,11 +107,56 @@ class ChatResponse(BaseModel):
     nurse_response: dict # Changed from str to dict to handle the rich JSON
     status: str
 
+class PatientGenerate(BaseModel):
+    description: str
+    encounters_count: int # Changed from str to dict to handle the rich JSON
+    imaging_count_in_encounters: int
+
 # --- Endpoints ---
 
 @app.get("/")
 async def root():
     return {"status": "MedForce Server is Running"}
+
+@app.post("/generate/patient")
+async def handle_chat(payload: PatientGenerate):
+    """
+    Receives JSON payload with Base64 encoded files.
+    Decodes files -> Saves to GCS -> Passes filenames to Agent.
+    """
+
+    try:
+        # 1. HANDLE FILE UPLOADS (Base64 -> GCS)
+        # patient_seed = {
+        #     "description" : "",
+        #     "encounters_count" : 3,
+        #     "imaging_count_in_encounters" : 2
+        # }
+        patient_id = f"PT-{str(uuid.uuid4())[:8].upper()}"
+        seed_dict = payload.__dict__
+        seed_dict["patient_id"] = patient_id
+
+        PM = my_agents.PatientManager(payload.__dict__)
+        await PM.generate_ground_truth_patient()
+
+        await process_pre_consult(patient_id)
+        await process_board(patient_id)
+        await process_board_update(patient_id)
+
+        return {
+            "status": "success",
+            "patient_id": patient_id
+        }
+
+    except FileNotFoundError:
+        logger.error(f"Patient data not found for ID: {payload.patient_id}")
+        raise HTTPException(status_code=404, detail="Patient data not found.")
+    
+    except Exception as e:
+        logger.error(f"Error processing chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.post("/chat", response_model=ChatResponse)
 async def handle_chat(payload: ChatRequest):
@@ -186,6 +231,8 @@ async def handle_chat(payload: ChatRequest):
     except Exception as e:
         logger.error(f"Error processing chat: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.get("/chat/{patient_id}")
 async def get_chat_history(patient_id: str):
@@ -349,12 +396,19 @@ async def process_board_update(patient_id: str,file_path: str):
 async def get_image(patient_id:str, file_path: str):
 
     try:
+        # 1. Read the raw bytes
         byte_data = chat_agent.gcs.read_file_as_bytes(f"patient_data/{patient_id}/raw_data/{file_path}")
         
-        return {
-            "file": file_path, 
-            "data": byte_data
-            }
+        # 2. Determine media type (optional but good practice)
+        media_type = "image/png"
+        if file_path.endswith(".jpg") or file_path.endswith(".jpeg"):
+            media_type = "image/jpeg"
+        elif file_path.endswith(".pdf"):
+            media_type = "application/pdf"
+
+        # 3. Return a direct HTTP Response containing the bytes
+        return Response(content=byte_data, media_type=media_type)
+
 
     except Exception as e:
         logger.error(f"Error getting image for {patient_id}: {str(e)}")
@@ -503,6 +557,47 @@ async def update_schedule_details(request: SwitchSchedule):
     except Exception as e:
         logger.error(f"Error updating schedule: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/schedule/switch_slots")
+async def switch_slots(request: SwitchSchedule):
+    """
+    Switches the patient and status between two time slots for a given nurse.
+    """
+    try:
+        # 1. Determine File
+        if request.clinician_id.startswith("N"):
+            doc_file = "nurse_schedule.csv"
+        elif request.clinician_id.startswith("D"):
+            doc_file = "doctor_schedule.csv"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid Clinician ID prefix")
+
+        # 2. Initialize Manager
+        schedule_ops = schedule_manager.ScheduleCSVManager(
+            gcs_manager=gcs, 
+            csv_blob_path=f"clinic_data/{doc_file}"
+        )
+
+        # 3. Perform Slot Switch
+        success = schedule_ops.switch_appointments(
+            nurse_id=request.clinician_id,
+            date1=request.item1.date,
+            time1=request.item1.time,
+            date2=request.item2.date,
+            time2=request.item2.time
+        )
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Slot not found.")
+
+        return {"message": "Schedule updated successfully."}
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error updating schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 

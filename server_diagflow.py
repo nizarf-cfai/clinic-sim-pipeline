@@ -7,6 +7,12 @@ import bucket_ops
 import json
 import schedule_manager
 
+
+import smtplib
+import os
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 app = FastAPI(title="Clinic Agent Backend")
 gcs = bucket_ops.GCSBucketManager(bucket_name="clinic_sim")
 
@@ -90,7 +96,14 @@ async def get_available_slots(doctor_type: Optional[str] = "General"):
 
     schedule_ops = schedule_manager.ScheduleCSVManager(gcs_manager=gcs, csv_blob_path=f"clinic_data/doctor_schedule.csv")
     return schedule_ops.get_empty_schedule()
-
+    
+    slots = [
+        f"Tomorrow ({tomorrow.strftime('%A')}) at 10:00 AM",
+        f"Tomorrow ({tomorrow.strftime('%A')}) at 2:00 PM",
+        f"{day_after.strftime(fmt)} 9:00 AM"
+    ]
+    
+    return {"available_slots": slots}
 
 # ==========================================
 # 3. HOW TO RUN

@@ -1,161 +1,136 @@
-Here is the Markdown documentation for your API.
 
-# MedForce Hepatology Chat API Documentation
+# MedForce API Usage Guide
 
-**Base URL:** `https://clinic-sim-pipeline-481780815788.europe-west1.run.app`
+**Base URL:**
+```
+https://clinic-sim-pipeline-481780815788.europe-west1.run.app
+```
 
-This API handles the live simulation of a Hepatology Clinic Admin (Nurse Linda). It manages patient conversations, state processing via AI agents, and conversation history retrieval from Google Cloud Storage.
+This guide details how to interact with the Patient Generation, Image Retrieval, and Schedule Management endpoints using Python.
 
 ---
 
-## Endpoints
+## 1. Generate Synthetic Patient
+Creates a new patient profile, history, and medical records based on a natural language clinical seed description.
 
-### 1. Send Message to Agent
-Process a patient message, attachment, or form submission through the AI logic and get the Admin's response.
-
-*   **URL:** `/chat`
+*   **Endpoint:** `/generate/patient`
 *   **Method:** `POST`
-*   **Content-Type:** `application/json`
 
-#### Request Body (`ChatRequest`)
-| Field | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `patient_id` | string | Yes | The unique identifier for the patient (e.g., "P0001"). |
-| `patient_message` | string | Yes | The text message from the patient. |
-| `patient_attachment` | list[str] | No | A list of filenames if the user is simulating a file upload. |
-| `patient_form` | dict | No | A JSON object containing the filled intake form data (used when responding to a `SEND_FORM` action). |
-
-**Example Request (Standard Text):**
-```json
-{
-  "patient_id": "P0001",
-  "patient_message": "Hi, I need to book an appointment."
-}
-```
-
-**Example Request (Form Submission):**
-```json
-{
-  "patient_id": "P0001",
-  "patient_message": "I have filled out the form.",
-  "patient_form": {
-      "name": "John Doe",
-      "dob": "1980-01-01",
-      "complaint": "Jaundice"
-  }
-}
-```
-
-#### Response (`ChatResponse`)
+### Request Body Schema
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `patient_id` | string | The ID of the patient. |
-| `status` | string | Request status (e.g., "success"). |
-| `nurse_response` | object | The structured response from the AI Agent. |
+| `description` | string | A detailed clinical narrative describing the patient's symptoms, labs, and history. |
+| `encounters_count` | integer | The number of historical medical encounters to generate. |
+| `imaging_count_in_encounters` | integer | How many of those encounters should include imaging reports. |
 
-**Example Response:**
-```json
-{
-  "patient_id": "P0001",
-  "status": "success",
-  "nurse_response": {
-    "message": "Thank you. Please confirm your details in this form.",
-    "action_type": "SEND_FORM",
-    "form_request": {
-        "name": "",
-        "dob": "",
-        "contact": {}
-    },
-    "sender": "admin"
-  }
+### Python Example
+```python
+import requests
+import json
+
+BASE_URL = "https://clinic-sim-pipeline-481780815788.europe-west1.run.app"
+endpoint = f"{BASE_URL}/generate/patient"
+
+# Define the clinical seed
+patient_seed = {
+    "description": "A 44-year-old male presents with profound malaise and a dull, aching sensation localized to the right upper quadrant of the abdomen. Clinical examination reveals mild scleral icterus and a noticeable distension of the abdominal cavity. The patient reports a sudden onset of dark, tea-colored urine and pale, clay-colored stools over the past week. Serum analysis indicates a significant elevation in hepatic transaminases, with ALT and AST levels exceeding ten times the upper limit of normal.",
+    "encounters_count": 5,
+    "imaging_count_in_encounters": 2
 }
-```
 
-#### Error Codes
-*   **404 Not Found:** Patient data directory does not exist in GCS (Run ground truth generation first).
-*   **500 Internal Server Error:** AI processing failure or connectivity issues.
+print(f"--- Generating Patient ---")
+response = requests.post(endpoint, json=patient_seed)
+
+if response.status_code == 200:
+    data = response.json()
+    print("✅ Patient Generated Successfully")
+    print(json.dumps(data, indent=2))
+else:
+    print(f"❌ Error {response.status_code}: {response.text}")
+```
 
 ---
 
-### 2. Get Chat History
-Retrieve the full conversation history for a specific patient.
+## 2. Retrieve & Display Medical Image
+Fetches a specific file (image/pdf) from a patient's raw data storage and displays it (useful for Jupyter Notebooks).
 
-*   **URL:** `/chat/{patient_id}`
+*   **Endpoint:** `/image/{patient_id}/{filename}`
 *   **Method:** `GET`
+*   **Response:** Direct binary stream of the image (MIME type `image/png`, `image/jpeg`, etc.).
 
-#### Path Parameters
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `patient_id` | string | The unique identifier for the patient. |
+### Python Example (Jupyter Notebook)
+```python
+import requests
+from IPython.display import Image, display
 
-#### Response
-Returns the full JSON object stored in the database/storage.
+BASE_URL = "https://clinic-sim-pipeline-481780815788.europe-west1.run.app"
 
-**Example Response:**
-```json
-{
-  "conversation": [
-    {
-      "sender": "admin",
-      "message": "Hello, this is Linda the Hepatology Clinic admin desk. How can I help you today?"
-    },
-    {
-      "sender": "patient",
-      "message": "I need an appointment."
-    },
-    {
-      "sender": "admin",
-      "message": "Have you booked via the NHS app?",
-      "action_type": "TEXT_ONLY"
-    }
-  ]
-}
+# Parameters
+PATIENT_ID = "P0001"
+# Ensure the filename matches exactly what is stored in the bucket
+FILENAME = "patient_data_P0001_raw_data_encounter_report_0_2026-01-19.png"
+
+url = f"{BASE_URL}/image/{PATIENT_ID}/{FILENAME}"
+
+print(f"Requesting: {url}")
+response = requests.get(url)
+
+# Check and Display
+if response.status_code == 200:
+    print("✅ Success! Displaying image:")
+    # Render the raw bytes directly
+    display(Image(data=response.content))
+else:
+    print(f"❌ Error {response.status_code}: {response.text}")
 ```
-
-#### Error Codes
-*   **404 Not Found:** Chat history file is missing or empty.
 
 ---
 
-### 3. Reset Chat History
-Wipes the conversation history for a patient and restores the initial greeting. Useful for restarting a simulation scenario.
+## 3. Switch Schedule Slots
+Swaps the contents (Patient and Status) of two specific time slots in a clinician's schedule. This is useful for rescheduling or moving appointments.
 
-*   **URL:** `/chat/{patient_id}/reset`
+*   **Endpoint:** `/schedule/switch_slots`
 *   **Method:** `POST`
 
-#### Path Parameters
-| Parameter | Type | Description |
+### Request Body Schema
+| Field | Type | Description |
 | :--- | :--- | :--- |
-| `patient_id` | string | The unique identifier for the patient. |
+| `clinician_id` | string | The ID of the Nurse (N...) or Doctor (D...). |
+| `item1` | object | The **first** time slot (Date/Time) to swap. |
+| `item2` | object | The **second** time slot (Date/Time) to swap. |
 
-#### Response
-**Example Response:**
-```json
-{
-  "status": "success",
-  "message": "Chat history has been reset.",
-  "current_state": {
-    "conversation": [
-      {
-        "sender": "admin",
-        "message": "Hello, this is Linda the Hepatology Clinic admin desk. How can I help you today?"
-      }
-    ]
-  }
+> **Note:** The `patient` field inside `item1` and `item2` is optional for finding the slot (Date and Time are the keys), but the object structure usually requires the field to exist.
+
+### Python Example
+```python
+import requests
+
+BASE_URL = "https://clinic-sim-pipeline-481780815788.europe-west1.run.app"
+endpoint = f"{BASE_URL}/schedule/switch_slots"
+
+payload = {
+    "clinician_id": "N0001",
+    # Slot A: 13:30 on Jan 22
+    "item1" : {
+        "date": "2026-01-22",
+        "time": "13:30",
+        "patient": "" # Optional, serves as placeholder
+    },
+    # Slot B: 14:00 on Jan 22
+    "item2" : {
+        "date": "2026-01-22",
+        "time": "14:00",
+        "patient": "" # Optional, serves as placeholder
+    }
 }
-```
 
----
+print(f"--- Switching Slots ---")
+response = requests.post(endpoint, json=payload)
 
-### 4. Health Check
-Check if the server is running.
-
-*   **URL:** `/`
-*   **Method:** `GET`
-
-#### Response
-```json
-{
-  "status": "MedForce Server is Running"
-}
+if response.status_code == 200:
+    data = response.json()
+    print("✅ Schedule Swapped Successfully")
+    print(data)
+else:
+    print(f"❌ Error {response.status_code}: {response.text}")
 ```
