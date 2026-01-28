@@ -44,6 +44,12 @@ input_criteria = {
 }
 
 
+patient_seed = {
+    "description" : "",
+    "encounters_count" : 3,
+    "imaging_count_in_encounters" : 2
+}
+
 
 PM = my_agents.PatientManager(input_criteria)
 gcs = bucket_ops.GCSBucketManager(bucket_name="clinic_sim")

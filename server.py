@@ -377,7 +377,7 @@ async def process_board_update(patient_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to process patient: {str(e)}")
 
 @app.get("/data/{patient_id}/{file_path}")
-async def process_board_update(patient_id: str,file_path: str):
+async def read_patient_file(patient_id: str,file_path: str):
     """
     Resets the chat history for a specific patient to the default initial greeting.
     """
