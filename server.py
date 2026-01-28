@@ -15,6 +15,11 @@ import bucket_ops
 import traceback
 import uuid
 from fastapi import Response
+from fastapi import FastAPI, Request, Response, Form
+from google.cloud import dialogflowcx_v3beta1 as dialogflow
+from twilio.twiml.messaging_response import MessagingResponse
+
+
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("medforce-server")
@@ -645,6 +650,58 @@ async def get_available_slots(doctor_type: Optional[str] = "General"):
     slots = schedule_ops.get_empty_schedule()
 
     return {"available_slots": slots}
+
+@app.post("/sms")
+async def sms_webhook(request: Request):
+    # 1. Parse SMS
+    AGENT_ID = "78ca4c26-89d6-45db-96a2-54236538d312"
+    PROJECT_ID = "medforce-pilot-backend"
+    LANGUAGE_CODE = "en"
+    form_data = await request.form()
+    incoming_msg = form_data.get('Body', '').strip()
+    sender_id = form_data.get('From', '') # e.g. +1555123456
+    
+    print(f"SMS from {sender_id}: {incoming_msg}")
+
+    # 2. Setup Dialogflow Client
+    #    Cloud Run automatically provides credentials here!
+    client_options = None
+    api_endpoint = f"europe-west2-dialogflow.googleapis.com:443"
+    client_options = {"api_endpoint": api_endpoint}
+
+    session_client = dialogflow.SessionsClient(client_options=client_options)
+    
+    # Use Sender Phone Number as Session ID
+    session_path = f"projects/{PROJECT_ID}/locations/europe-west2/agents/{AGENT_ID}/sessions/{sender_id}"
+
+    # 3. Send Text to Dialogflow
+    text_input = dialogflow.TextInput(text=incoming_msg)
+    query_input = dialogflow.QueryInput(text=text_input, language_code=LANGUAGE_CODE)
+    
+    try:
+        request_df = dialogflow.DetectIntentRequest(
+            session=session_path, query_input=query_input
+        )
+        response_df = session_client.detect_intent(request=request_df)
+        
+        # 4. Extract Bot Reply
+        bot_reply = "..."
+        for message in response_df.query_result.response_messages:
+            if message.text:
+                bot_reply = "".join(message.text.text)
+        
+        print(f"Bot Reply: {bot_reply}")
+
+    except Exception as e:
+        print(f"Dialogflow Error: {e}")
+        bot_reply = "System Error: I cannot reach the brain."
+
+    # 5. Send Reply via Twilio XML
+    resp = MessagingResponse()
+    resp.message(bot_reply)
+    
+    return Response(content=str(resp), media_type="application/xml")
+
 
 # --- Run Block ---
 if __name__ == "__main__":

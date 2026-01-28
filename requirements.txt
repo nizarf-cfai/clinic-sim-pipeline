@@ -20,3 +20,5 @@ google-cloud-speech
 mutagen
 pillow
 pandas
+google-cloud-dialogflow-cx
+twilio
