@@ -22,3 +22,4 @@ pillow
 pandas
 google-cloud-dialogflow-cx
 twilio
+python-multipart
